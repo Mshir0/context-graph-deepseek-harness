@@ -16,6 +16,7 @@ const SCOPES = ['code', 'context', 'interface', 'state', 'decisions', 'history']
 const TASKS = [['develop', '开发'], ['debug', '调试'], ['refactor', '重构'], ['test', '测试'], ['review', '审查'], ['docs', '文档']];
 const NODE_W = 178;
 const NODE_H = 88;
+const DOUBLE_PRESS_MS = 360;
 
 async function request(path, options = {}) {
   const response = await fetch(`${API}${path}`, {
@@ -120,6 +121,7 @@ function GraphPanel({ sessionId, projectPath, sendPrompt }) {
   const svgRef = useRef(null);
   const graphRef = useRef(graph); graphRef.current = graph;
   const selectedRef = useRef(selected); selectedRef.current = selected;
+  const pressRef = useRef({ key: '', time: 0 });
 
   const announce = useCallback((text, failed = false) => { setStatus(text); setError(failed); }, []);
   const load = useCallback(async () => {
@@ -179,8 +181,16 @@ function GraphPanel({ sessionId, projectPath, sendPrompt }) {
   const nodes = useMemo(() => new Map((graph?.nodes || []).map(node => [node.id, node])), [graph]);
   const updateNode = patch => setGraph(previous => ({ ...previous, nodes: previous.nodes.map(node => node.id === inspected.id ? { ...node, ...patch } : node) }));
   const updateEdge = patch => setGraph(previous => ({ ...previous, edges: previous.edges.map((edge, index) => index === inspected.index ? { ...edge, ...patch } : edge) }));
+  const selectItem = item => {
+    const key = item.kind === 'node' ? `node:${item.id}` : `edge:${item.index}`;
+    const now = Date.now();
+    const doublePressed = pressRef.current.key === key && now - pressRef.current.time <= DOUBLE_PRESS_MS;
+    pressRef.current = { key, time: now };
+    setSelected(item);
+    setInspected(doublePressed ? item : null);
+  };
   const point = event => graphPoint(svgRef.current, view, event.clientX, event.clientY);
-  const startPan = event => { if (event.button !== 0) return; event.currentTarget.setPointerCapture(event.pointerId); setSelected(null); setInspected(null); setGesture({ kind: 'pan', startX: event.clientX, startY: event.clientY, x: view.x, y: view.y }); };
+  const startPan = event => { if (event.button !== 0) return; pressRef.current = { key: '', time: 0 }; event.currentTarget.setPointerCapture(event.pointerId); setSelected(null); setInspected(null); setGesture({ kind: 'pan', startX: event.clientX, startY: event.clientY, x: view.x, y: view.y }); };
   const move = event => {
     if (!gesture) return;
     if (gesture.kind === 'pan') setView(current => ({ ...current, x: gesture.x + event.clientX - gesture.startX, y: gesture.y + event.clientY - gesture.startY }));
@@ -205,11 +215,10 @@ function GraphPanel({ sessionId, projectPath, sendPrompt }) {
         onWheel: event => { event.preventDefault(); const before = point(event); const zoom = Math.min(2, Math.max(.25, view.zoom * (event.deltaY > 0 ? .9 : 1.1))); const rect = svgRef.current.getBoundingClientRect(); setView({ zoom, x: event.clientX - rect.left - before.x * zoom, y: event.clientY - rect.top - before.y * zoom }); } },
         h('defs', null, h('marker', { id: 'cg-arrow', markerWidth: 8, markerHeight: 8, refX: 7, refY: 4, orient: 'auto' }, h('path', { d: 'M0,0 L8,4 L0,8 Z', fill: 'context-stroke' }))),
         h('g', { transform: `translate(${view.x} ${view.y}) scale(${view.zoom})` },
-          (graph?.edges || []).map((edge, index) => { const source = nodes.get(edge.source); const target = nodes.get(edge.target); if (!source || !target) return null; const d = edgePath(source, target); return h('g', { key: `${edge.source}-${edge.target}-${index}`, onPointerDown: event => { event.stopPropagation(); setSelected({ kind: 'edge', index }); setInspected(null); }, onDoubleClick: event => { event.stopPropagation(); setSelected({ kind: 'edge', index }); setInspected({ kind: 'edge', index }); } }, h('path', { d, className: 'cg-edge-hit' }), h('path', { d, className: 'cg-edge', 'data-type': edge.type, 'data-selected': selected?.kind === 'edge' && selected.index === index, markerEnd: 'url(#cg-arrow)' })); }),
+          (graph?.edges || []).map((edge, index) => { const source = nodes.get(edge.source); const target = nodes.get(edge.target); if (!source || !target) return null; const d = edgePath(source, target); return h('g', { key: `${edge.source}-${edge.target}-${index}`, onPointerDown: event => { event.stopPropagation(); selectItem({ kind: 'edge', index }); } }, h('path', { d, className: 'cg-edge-hit' }), h('path', { d, className: 'cg-edge', 'data-type': edge.type, 'data-selected': selected?.kind === 'edge' && selected.index === index, markerEnd: 'url(#cg-arrow)' })); }),
           gesture?.kind === 'connect' && nodes.get(gesture.source) ? h('path', { className: 'cg-temp', d: edgePath(nodes.get(gesture.source), { x: gesture.point.x, y: gesture.point.y - NODE_H / 2 }) }) : null,
           (graph?.nodes || []).map(node => h('g', { key: node.id, className: 'cg-node', transform: `translate(${node.x || 0} ${node.y || 0})`, 'data-selected': selected?.kind === 'node' && selected.id === node.id, 'data-mode': node.mode || 'AUTO',
-            onPointerDown: event => { event.stopPropagation(); const p = point(event); svgRef.current.setPointerCapture(event.pointerId); setSelected({ kind: 'node', id: node.id }); setInspected(null); setGesture({ kind: 'node', id: node.id, dx: p.x - (node.x || 0), dy: p.y - (node.y || 0) }); },
-            onDoubleClick: event => { event.stopPropagation(); setSelected({ kind: 'node', id: node.id }); setInspected({ kind: 'node', id: node.id }); } },
+            onPointerDown: event => { event.stopPropagation(); const p = point(event); svgRef.current.setPointerCapture(event.pointerId); selectItem({ kind: 'node', id: node.id }); setGesture({ kind: 'node', id: node.id, dx: p.x - (node.x || 0), dy: p.y - (node.y || 0) }); } },
             h('rect', { className: 'cg-node-box', width: NODE_W, height: NODE_H, rx: 5 }),
             h('path', { className: 'cg-node-head', d: `M5 0 H${NODE_W - 5} Q${NODE_W} 0 ${NODE_W} 5 V28 H0 V5 Q0 0 5 0` }),
             h('text', { className: 'cg-node-title', x: 11, y: 19 }, (node.label || node.id).slice(0, 25)),

@@ -30,6 +30,7 @@ test('client adds a conversation view tab and sends through scoped conversation'
   assert.match(source, /id: 'context-graph'/);
   assert.match(source, /sessions\.scope\(sessionId\)/);
   assert.match(source, /conversation\.send\(text\)/);
-  assert.match(source, /onDoubleClick: event =>[\s\S]*setInspected\(\{ kind: 'node'/);
+  assert.match(source, /const selectItem = item =>/);
+  assert.match(source, /DOUBLE_PRESS_MS/);
   assert.doesNotMatch(source, /\/context-graph\/index\.html/);
 });
