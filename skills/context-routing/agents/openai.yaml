@@ -1,0 +1,4 @@
+interface:
+  display_name: "Context Routing"
+  short_description: "Route structured context nodes conservatively"
+  default_prompt: "Use $context-routing to propose reviewed relationships between context nodes."

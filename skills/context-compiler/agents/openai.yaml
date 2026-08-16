@@ -1,0 +1,4 @@
+interface:
+  display_name: "Context Compiler"
+  short_description: "Compile relevant context from any graph entry"
+  default_prompt: "Use $context-compiler to preview context selected from a graph entry."

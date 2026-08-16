@@ -1,0 +1,4 @@
+interface:
+  display_name: "Module Discovery"
+  short_description: "Discover code modules for Context Graph"
+  default_prompt: "Use $module-discovery to discover project modules before updating the graph."

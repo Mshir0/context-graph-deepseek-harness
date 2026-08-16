@@ -1,0 +1,4 @@
+interface:
+  display_name: "Dependency Analysis"
+  short_description: "Analyze evidence-backed code dependencies"
+  default_prompt: "Use $dependency-analysis to inspect code relationships and evidence."

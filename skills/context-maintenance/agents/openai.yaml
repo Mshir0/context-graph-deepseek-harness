@@ -1,0 +1,4 @@
+interface:
+  display_name: "Context Maintenance"
+  short_description: "Maintain graph consistency without losing overrides"
+  default_prompt: "Use $context-maintenance to review graph drift while preserving manual overrides."

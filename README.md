@@ -56,6 +56,9 @@ pnpm dsh web
 - `context_graph_scan`：分析当前 Session workspace，初始化 `.context/` 并返回关系漂移建议。
 - `context_graph_get`：读取 Context Graph。
 - `context_graph_save`：保存用户确认后的完整 Graph JSON。
+- `context_graph_add_node` / `context_graph_add_edge`：保存单个已确认的 Context Node 或手工关系。
+- `context_extract`：从单条用户或 AI 消息提取可追溯的 Task、Requirement、Constraint、Decision 或 Issue Proposal；仅在 `apply=true` 时保存。
+- `context_detect_conflicts`：检查尚未通过 `supersedes` 解决的潜在结构化上下文冲突。
 - `context_select`：为当前 DSH Session 指定目标模块以及强制加入/排除项。
 - `context_compile`：预览 token 预算下最终会注入的上下文。
 - `context_git_summary`：读取当前 workspace 的相关 Git 状态和历史。
@@ -76,6 +79,16 @@ pnpm dsh web
 
 如果目标模块无法可靠推断，插件不会猜测或加载全工程；Agent 可调用 `context_select` 明确目标。
 
+## Modular Context Graph
+
+代码模块只是统一 Context Node 的一种。`graph.json` 同时支持 `requirement`、`task`、`constraint`、`decision`、`interface`、`documentation`、`conversation`、`artifact`、`test`、`issue`、`note` 和 `project_rule`。每个节点可以保存内容、来源、优先级、状态、时间和扩展 metadata。
+
+原始 Conversation/Message 节点标记为 Raw Layer，仅通过 `derived_from` 和 `contains` 提供来源追溯，不会默认进入模型上下文。`context_compile` 可从 Task、Requirement、Issue、Test 或 CodeModule 等任意 `entry` 开始遍历，并在预览中报告包含节点、排除节点、关系原因和估算 Tokens。
+
+`skills/context-extraction/SKILL.md` 规定保守提取、确认后保存、来源追溯、`supersedes` 和冲突检查流程。无法确定模块目标时不会创建猜测关系。
+
+随插件发布的 Skill 按职责拆分为 `module-discovery`、`dependency-analysis`、`interface-contract`、`context-extraction`、`context-routing`、`context-maintenance` 和 `context-compiler`，共享同一 Graph 与工具接口。
+
 ## Dependency & Interface Skill
 
 `skills/dependency-interface/SKILL.md` 随插件发布。它将 Python AST 分析作为独立的工程依赖事实发现层：输出模块、符号级关系、接口 Contract、代码证据及置信度；不保存 Context Graph、不修改业务代码，也不决定模型最终上下文。Context Graph 的更新仍必须经 `context_graph_save` 显式确认，`FORCE_INCLUDE` 和 `FORCE_EXCLUDE` 永远优先于自动分析。
@@ -88,12 +101,12 @@ pnpm dsh web
 
 - 中文界面以及跟随 DSH 的浅色/深色显示。
 - 节点拖动、画布平移、滚轮缩放、适合画布和自动排布。
+- 创建和编辑不同类型的 Context Node，并按标题、内容或节点类型搜索筛选。
 - 从节点右端口拖到另一节点左端口，手动创建连接。
-- 编辑关系类型、scope 和 `AUTO / FORCE_INCLUDE / FORCE_EXCLUDE`。
+- 编辑关系类型、scope 和 `AUTO / MANUAL / FORCE_INCLUDE / FORCE_EXCLUDE`。
+- 从当前选择的任意 Context Entry 打开 Context Preview。
 - `Ctrl/⌘ + S` 保存、`Delete` 删除、`F` 适合画布、`A` 自动排布、`Esc` 取消。
-- 底部选择开发、调试、重构、测试、审查或文档任务，输入提示词后用 `Ctrl/⌘ + Enter` 发送到当前 DSH session。
-
-底部输入会直接复用当前 DSH session。Host 端仅挂载同源 `/context-graph/api/*` 数据接口，并校验请求路径必须属于 `ctx.workspaceRegistry` 中已注册的 workspace。
+对话输入区的“上下文”命令可把任务类型、内容和当前目标添加到 DSH 原生输入框。Host 端仅挂载同源 `/context-graph/api/*` 数据接口，并校验请求路径必须属于 `ctx.workspaceRegistry` 中已注册的 workspace。
 
 ## Bundle 配置
 

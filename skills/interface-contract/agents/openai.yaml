@@ -1,0 +1,4 @@
+interface:
+  display_name: "Interface Contract"
+  short_description: "Extract cross-module interface contracts"
+  default_prompt: "Use $interface-contract to extract the minimal interface context for a module."

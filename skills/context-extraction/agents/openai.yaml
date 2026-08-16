@@ -1,0 +1,4 @@
+interface:
+  display_name: "Context Extraction"
+  short_description: "Extract traceable modular context from messages"
+  default_prompt: "Use $context-extraction to propose traceable structured context nodes from this message."

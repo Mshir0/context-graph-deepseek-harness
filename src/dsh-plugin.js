@@ -12,6 +12,7 @@ import {
 } from './core.js';
 import { registerContextGraphRoutes } from './dsh-routes.js';
 import { escapeAttribute, inferTarget, latestUserText, preview } from './dsh-context.js';
+import { applyExtraction, detectContextConflicts, extractContext } from './context-extraction.js';
 import {
   analyzeDependencies,
   analyzeModule,
@@ -41,7 +42,7 @@ export function apply(ctx, input = {}) {
   ctx.systemPrompt.section({
     name: 'context-graph:policy',
     order: 99,
-    text: 'Use context_graph_scan when project structure changes. Before modifying a module, use context_select or context_compile when the target is ambiguous. Treat Code Graph dependencies as evidence, not automatic Context Graph policy; preserve explicit FORCE_INCLUDE and FORCE_EXCLUDE choices.',
+    text: 'Use context_graph_scan when project structure changes. Use context_extract to propose durable Task, Requirement, Constraint, or Decision nodes from important conversation content; do not apply uncertain proposals. Before modifying a module, use context_select or context_compile when the entry is ambiguous. Treat raw conversation and Code Graph dependencies as evidence, not automatic context policy; preserve MANUAL, FORCE_INCLUDE, and FORCE_EXCLUDE choices.',
   });
 
   ctx.on('agent/session-start', ({ agent }) => {
@@ -93,6 +94,39 @@ function registerTools(ctx, config, sessionState) {
   }));
 
   ctx.tools.register(textTool({
+    name: 'context_extract',
+    description: 'Conservatively extract traceable structured Context Nodes from one user or assistant message. Returns a proposal unless apply=true.',
+    parameters: {
+      text: { type: 'string', required: true, description: 'One raw user or assistant message.' },
+      source: { type: 'string', description: 'user or assistant.' },
+      conversation_id: { type: 'string', description: 'Stable raw conversation source id.' },
+      message_id: { type: 'string', description: 'Optional stable raw message id.' },
+      apply: { type: 'boolean', description: 'Persist the proposed nodes and edges after review.' },
+    },
+    async execute(args, exec) {
+      const root = workspaceOf(exec); const graph = await loadGraph(root);
+      const extraction = extractContext(args.text, { source: args.source || 'user', conversationId: args.conversation_id || `conversation-${sessionKey(exec)}`, messageId: args.message_id, graph });
+      if (args.apply === true) { const saved = await saveGraph(root, applyExtraction(graph, extraction)); return JSON.stringify({ applied: true, extraction, graph: saved }, null, 2); }
+      return JSON.stringify({ applied: false, extraction }, null, 2);
+    },
+  }));
+
+  ctx.tools.register(textTool({
+    name: 'context_detect_conflicts', description: 'Detect potential conflicts among active structured requirements, constraints, and decisions without changing the graph.', parameters: {},
+    async execute(_args, exec) { return JSON.stringify(detectContextConflicts(await loadGraph(workspaceOf(exec))), null, 2); },
+  }));
+
+  ctx.tools.register(textTool({
+    name: 'context_graph_add_node', description: 'Validate and persist one explicitly approved Context Node.', parameters: { node_json: { type: 'string', required: true, description: 'ContextNode JSON.' } },
+    async execute(args, exec) { const root = workspaceOf(exec); const graph = await loadGraph(root); const node = JSON.parse(args.node_json); if (graph.nodes.some(item => item.id === node.id)) throw new Error(`Duplicate context node: ${node.id}`); const index = graph.nodes.length; graph.nodes.push({ x: 80 + (index % 4) * 260, y: 80 + Math.floor(index / 4) * 180, mode: 'MANUAL', ...node }); return JSON.stringify(await saveGraph(root, graph), null, 2); },
+  }));
+
+  ctx.tools.register(textTool({
+    name: 'context_graph_add_edge', description: 'Validate and persist one explicitly approved Context Edge. Use MANUAL for a user-created relationship.', parameters: { edge_json: { type: 'string', required: true, description: 'ContextEdge JSON with source, target, type, scope, and mode.' } },
+    async execute(args, exec) { const root = workspaceOf(exec); const graph = await loadGraph(root); graph.edges.push({ mode: 'MANUAL', ...JSON.parse(args.edge_json) }); return JSON.stringify(await saveGraph(root, graph), null, 2); },
+  }));
+
+  ctx.tools.register(textTool({
     name: 'context_graph_get',
     description: 'Read the current workspace Context Graph, including nodes, typed edges, scopes, and manual overrides.',
     parameters: {},
@@ -133,7 +167,8 @@ function registerTools(ctx, config, sessionState) {
     name: 'context_compile',
     description: 'Compile and preview prioritized context for a task in the current DSH workspace without invoking a model.',
     parameters: {
-      target: { type: 'string', required: true, description: 'Target module id.' },
+      entry: { type: 'string', description: 'Context entry node id: Task, CodeModule, Requirement, Issue, Test, or another structured node.' },
+      target: { type: 'string', description: 'Backward-compatible target module id.' },
       task: { type: 'string', required: true, description: 'Current coding task.' },
       token_budget: { type: 'integer', description: 'Override the plugin token budget for this preview.' },
       include: { type: 'array', items: { type: 'string' }, description: 'Additional force-included modules.' },
@@ -142,7 +177,8 @@ function registerTools(ctx, config, sessionState) {
     },
     async execute(args, exec) {
       const root = workspaceOf(exec);
-      const result = await compileContext({ projectPath: root, graph: await loadGraph(root), target: args.target, task: args.task, tokenBudget: args.token_budget || config.tokenBudget, include: args.include || [], exclude: args.exclude || [] });
+      const entry = args.entry || args.target; if (!entry) throw new Error('context_compile requires entry or target');
+      const result = await compileContext({ projectPath: root, graph: await loadGraph(root), entry, target: args.target || entry, task: args.task, tokenBudget: args.token_budget || config.tokenBudget, include: args.include || [], exclude: args.exclude || [] });
       return JSON.stringify(preview(result, args.include_content === true), null, 2);
     },
   }));
@@ -222,7 +258,7 @@ async function compileStepMessage(agent, messages, config, sessionState, signal)
   const selected = sessionState.get(key) || {};
   const target = selected.target && graph.nodes.some(node => node.id === selected.target) ? selected.target : inferTarget(task, graph.nodes);
   if (target === null) return null;
-  const result = await compileContext({ projectPath: root, graph, target, task, tokenBudget: config.tokenBudget, include: selected.include || [], exclude: selected.exclude || [] });
+  const result = await compileContext({ projectPath: root, graph, entry: target, target, task, tokenBudget: config.tokenBudget, include: selected.include || [], exclude: selected.exclude || [] });
   const fingerprint = createHash('sha256').update(`${task}\0${target}\0${result.context}`).digest('hex');
   if (selected.fingerprint === fingerprint) return null;
   sessionState.set(key, { ...selected, target, fingerprint });
