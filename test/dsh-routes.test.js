@@ -33,11 +33,11 @@ test('registers one Harness route prefix and exposes registered workspaces', asy
   assert.equal(payload.tokenBudget, 4321);
 });
 
-test('serves the editor inside Harness and rejects unregistered paths', async () => {
+test('does not expose a standalone editor and rejects unregistered paths', async () => {
   const route = harnessRoute();
   const page = await call(route.handler, '/context-graph/');
-  assert.equal(page.status, 200);
-  assert.match(Buffer.concat(page.chunks).toString('utf8'), /Context Graph/);
+  assert.equal(page.status, 404);
+  assert.match(Buffer.concat(page.chunks).toString('utf8'), /details panel/);
   const denied = await call(route.handler, '/context-graph/api/scan', 'POST', JSON.stringify({ projectPath: process.platform === 'win32' ? 'C:\\Windows' : '/tmp' }));
   assert.equal(denied.status, 403);
 });

@@ -1,9 +1,6 @@
-import { readFile, realpath, stat } from 'node:fs/promises';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { realpath } from 'node:fs/promises';
 import { analyzeProject, compileContext, ensureMemory, gitSummary, loadGraph, reconcileGraphs, saveGraph } from './core.js';
 
-const PUBLIC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 const PREFIX = '/context-graph';
 const BODY_CAP = 2 * 1024 * 1024;
 
@@ -15,8 +12,7 @@ async function handle(ctx, config, req, res) {
   try {
     const url = new URL(req.url || '/', 'http://dsh.local');
     if (url.pathname.startsWith(`${PREFIX}/api/`)) return await api(ctx, config, req, res, url);
-    if (req.method !== 'GET' && req.method !== 'HEAD') return end(res, 405, 'text/plain', 'Method not allowed');
-    return await staticFile(req, res, url.pathname);
+    return json(res, 404, { error: 'Context Graph is available in the DeepSeek Harness details panel' });
   } catch (error) {
     ctx.logger.warn(`context-graph route failed: ${String(error)}`);
     return json(res, error.code === 'ENOENT' ? 404 : 500, { error: error.message || String(error) });
@@ -71,20 +67,6 @@ async function bodyJson(req) {
   }
   if (parts.length === 0) return {};
   return JSON.parse(Buffer.concat(parts).toString('utf8'));
-}
-
-async function staticFile(req, res, pathname) {
-  let relative = pathname.slice(PREFIX.length).replace(/^\/+/, '');
-  if (relative === '') relative = 'index.html';
-  const file = path.resolve(PUBLIC, decodeURIComponent(relative));
-  if (!file.startsWith(`${PUBLIC}${path.sep}`)) return end(res, 403, 'text/plain', 'Forbidden');
-  const info = await stat(file);
-  if (!info.isFile()) return end(res, 404, 'text/plain', 'Not found');
-  const data = await readFile(file);
-  const type = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' }[path.extname(file)] || 'application/octet-stream';
-  res.writeHead(200, { 'content-type': type, 'content-length': data.length });
-  if (req.method === 'HEAD') return res.end();
-  res.end(data);
 }
 
 function json(res, status, value) { return end(res, status, 'application/json; charset=utf-8', JSON.stringify(value)); }

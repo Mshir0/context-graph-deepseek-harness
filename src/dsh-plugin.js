@@ -140,12 +140,6 @@ function registerTools(ctx, config, sessionState) {
     async execute(args, exec) { return JSON.stringify(await gitSummary(workspaceOf(exec), args.target_path || ''), null, 2); },
   }));
 
-  ctx.tools.register(textTool({
-    name: 'context_graph_ui',
-    description: 'Return the Context Graph editor path hosted inside the current DeepSeek Harness web application.',
-    parameters: {},
-    async execute() { return '/context-graph/'; },
-  }));
 }
 
 function textTool(definition) {
