@@ -165,8 +165,19 @@ function nextNodePosition(nodes) {
   return { x: 80, y: 80 + nodes.length * 180 };
 }
 
-export function reconcileGraphs(codeGraph, contextGraph) {
+export function reconcileGraphs(codeGraph, contextGraph, { prune = true } = {}) {
   const graph = structuredClone(contextGraph);
+  graph.mappings ||= [];
+  const scannedIds = new Set((codeGraph.modules || []).map(module => module.id));
+  const removed = new Set(prune ? graph.nodes.filter(node => {
+    const implementation = node.type === 'code_module' || node.type?.startsWith('implementation_');
+    return implementation && node.source === 'code' && !scannedIds.has(node.id);
+  }).map(node => node.id) : []);
+  if (removed.size) {
+    graph.nodes = graph.nodes.filter(node => !removed.has(node.id));
+    graph.edges = graph.edges.filter(edge => !removed.has(edge.source) && !removed.has(edge.target));
+    graph.mappings = graph.mappings.map(mapping => ({ ...mapping, implementation: (mapping.implementation || []).filter(item => !removed.has(typeof item === 'string' ? item : item.id)) })).filter(mapping => mapping.implementation.length > 0);
+  }
   const positioned = [];
   for (const node of graph.nodes) {
     if (!Number.isFinite(node.x) || !Number.isFinite(node.y) || positioned.some(previous => positionsOverlap(node, previous))) {
@@ -195,7 +206,7 @@ export function reconcileGraphs(codeGraph, contextGraph) {
   for (const edge of graph.edges) if (ids.has(edge.source) && ids.has(edge.target) && (edge.mode || 'AUTO') === 'AUTO' && ['dependency', 'interface', 'depends_on'].includes(edge.type) && !codeEdges.has(edgeKey(edge.source, edge.target))) {
     suggestions.push({ kind: 'stale', source: edge.source, target: edge.target, reason: `${edge.target} is no longer imported by ${edge.source}` });
   }
-  return { graph, codeGraph, suggestions };
+  return { graph, codeGraph, suggestions, removed: [...removed] };
 }
 
 export async function ensureMemory(projectPath, graph) {

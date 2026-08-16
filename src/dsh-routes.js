@@ -41,7 +41,7 @@ async function api(ctx, config, req, res, url) {
     return json(res, 200, result);
   }
   if (url.pathname === `${PREFIX}/api/functional-infer`) {
-    const graph = await loadGraph(projectPath); const facts = await analyzeDependencies(projectPath); const implementationGraph = reconcileGraphs({ modules: facts.modules.map(module => ({ ...module, imports: [] })) }, graph).graph; const proposal = inferFunctionalModules(implementationGraph, facts);
+    const graph = await loadGraph(projectPath); const facts = await analyzeDependencies(projectPath); const implementationGraph = reconcileGraphs({ modules: facts.modules.map(module => ({ ...module, imports: [] })) }, graph, { prune: false }).graph; const proposal = inferFunctionalModules(implementationGraph, facts);
     if (input.apply === true) return json(res, 200, { applied: true, proposal, graph: await saveGraph(projectPath, applyFunctionalInference(implementationGraph, proposal)) });
     return json(res, 200, { applied: false, proposal });
   }

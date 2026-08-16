@@ -90,7 +90,7 @@ function registerTools(ctx, config, sessionState) {
       const result = reconcileGraphs(await analyzeProject(root), await loadGraph(root));
       await ensureMemory(root, result.graph);
       await saveGraph(root, result.graph);
-      return JSON.stringify({ modules: result.codeGraph.modules.length, analyzerErrors: result.codeGraph.errors, suggestions: result.suggestions }, null, 2);
+      return JSON.stringify({ modules: result.codeGraph.modules.length, removed: result.removed, analyzerErrors: result.codeGraph.errors, suggestions: result.suggestions }, null, 2);
     },
   }));
 
@@ -99,7 +99,7 @@ function registerTools(ctx, config, sessionState) {
     description: 'Infer non-binding Functional Node and Functional-to-Implementation mapping proposals from implementation dependency facts. Code calls are never directly exposed as semantic edges.',
     parameters: { apply: { type: 'boolean', description: 'Persist inferred functional nodes, mappings, and semantic edge proposals after review.' } },
     async execute(args, exec) {
-      const root = workspaceOf(exec); const graph = await loadGraph(root); const facts = await analyzeDependencies(root); const implementationGraph = reconcileGraphs({ modules: facts.modules.map(module => ({ ...module, imports: [] })) }, graph).graph;
+      const root = workspaceOf(exec); const graph = await loadGraph(root); const facts = await analyzeDependencies(root); const implementationGraph = reconcileGraphs({ modules: facts.modules.map(module => ({ ...module, imports: [] })) }, graph, { prune: false }).graph;
       const proposal = inferFunctionalModules(implementationGraph, facts);
       if (args.apply === true) { const saved = await saveGraph(root, applyFunctionalInference(implementationGraph, proposal)); return JSON.stringify({ applied: true, proposal, graph: saved }, null, 2); }
       return JSON.stringify({ applied: false, proposal }, null, 2);

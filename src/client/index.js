@@ -181,7 +181,7 @@ function GraphPanel({ sessionId, projectPath, sendPrompt, setTarget }) {
   }, [announce, projectPath]);
   const scan = useCallback(async () => {
     if (!projectPath) return;
-    try { announce('正在扫描代码…'); const result = await request('/scan', { method: 'POST', body: JSON.stringify({ projectPath }) }); setGraph(result.graph); setSelected(null); setInspected(null); announce(`扫描完成：${result.graph.nodes.length} 个模块，${result.suggestions.length} 条建议`); }
+    try { announce('正在扫描代码…'); const result = await request('/scan', { method: 'POST', body: JSON.stringify({ projectPath }) }); setGraph(result.graph); setSelected(null); setInspected(null); const removed = result.removed?.length ? `，已移除 ${result.removed.length} 个已删除实现` : ''; announce(`扫描完成：${result.graph.nodes.length} 个模块，${result.suggestions.length} 条建议${removed}`); }
     catch (cause) { announce(cause.message, true); }
   }, [announce, projectPath]);
   const fit = useCallback(() => { const svg = svgRef.current; if (svg && graphRef.current) setView(fitView(graphRef.current, svg.clientWidth, svg.clientHeight)); }, []);
@@ -189,7 +189,7 @@ function GraphPanel({ sessionId, projectPath, sendPrompt, setTarget }) {
   const remove = useCallback(() => {
     const current = selectedRef.current; if (!current) return;
     setGraph(previous => current.kind === 'node'
-      ? { ...previous, nodes: previous.nodes.filter(node => node.id !== current.id), edges: previous.edges.filter(edge => edge.source !== current.id && edge.target !== current.id) }
+      ? { ...previous, nodes: previous.nodes.filter(node => node.id !== current.id), edges: previous.edges.filter(edge => edge.source !== current.id && edge.target !== current.id), mappings: (previous.mappings || []).map(mapping => ({ ...mapping, implementation: (mapping.implementation || []).filter(item => (typeof item === 'string' ? item : item.id) !== current.id) })).filter(mapping => mapping.functional !== current.id && mapping.implementation.length > 0) }
       : { ...previous, edges: previous.edges.filter((_edge, index) => index !== current.index) });
     setSelected(null); setInspected(null); announce('已删除，保存后生效');
   }, [announce]);

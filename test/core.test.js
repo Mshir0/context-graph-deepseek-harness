@@ -41,6 +41,25 @@ test('repairs overlapping positions retained from an earlier scan', () => {
   assert.ok(Math.abs(second.x - first.x) >= 220 || Math.abs(second.y - first.y) >= 140);
 });
 
+test('removes deleted automatic implementation nodes and their graph references on rescan', () => {
+  const graph = emptyGraph('/tmp/project');
+  graph.nodes = [
+    { id: 'live', type: 'code_module', source: 'code', path: 'live.py' },
+    { id: 'deleted', type: 'code_module', source: 'code', path: 'deleted.py' },
+    { id: 'manual', type: 'code_module', source: 'user', path: 'manual.py' },
+    { id: 'function.live', type: 'functional', source: 'user', title: 'Live Capability' },
+  ];
+  graph.edges = [{ source: 'function.live', target: 'deleted', type: 'implemented_by', scope: [], mode: 'AUTO' }];
+  graph.mappings = [{ functional: 'function.live', implementation: [{ id: 'live', path: 'live.py' }, { id: 'deleted', path: 'deleted.py' }] }];
+  const result = reconcileGraphs({ modules: [{ id: 'live', path: 'live.py', imports: [] }] }, graph);
+  assert.deepEqual(result.removed, ['deleted']);
+  assert.ok(!result.graph.nodes.some(node => node.id === 'deleted'));
+  assert.ok(result.graph.nodes.some(node => node.id === 'manual'));
+  assert.ok(!result.graph.edges.some(edge => edge.source === 'deleted' || edge.target === 'deleted'));
+  assert.deepEqual(result.graph.mappings[0].implementation.map(item => item.id), ['live']);
+  assert.deepEqual(validateGraph(result.graph), []);
+});
+
 test('scans C source files and resolves quoted includes to project modules', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'context-graph-c-'));
   await writeFile(path.join(root, 'hello.c'), '#include "helper.h"\nint main(void) { return helper(); }\n');
