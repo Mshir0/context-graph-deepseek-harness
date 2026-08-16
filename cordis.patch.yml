@@ -1,0 +1,10 @@
+# DeepSeek Harness profile bundle. The runtime joins the host Agent lifecycle;
+# it does not start a process, model client, or standalone web server.
+- insert:
+    - id: context-graph
+      name: dsh-context-graph
+      config:
+        tokenBudget: 16000
+        autoScan: true
+        autoInject: true
+        webUi: true

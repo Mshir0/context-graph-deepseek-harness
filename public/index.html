@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Context Graph</title>
-  <link rel="stylesheet" href="/styles.css">
+  <title>Context Graph · DeepSeek Harness</title>
+  <link rel="stylesheet" href="/context-graph/styles.css">
 </head>
 <body>
   <header class="topbar">
     <div class="brand"><span class="brand-mark">CG</span><span>Context Graph</span></div>
-    <label class="project-field"><span>Project</span><input id="project" spellcheck="false"></label>
+    <label class="project-field"><span>DSH workspace</span><select id="project"></select></label>
     <button id="scan" title="Analyze Python dependencies">Scan code</button>
     <button id="layout" class="secondary" title="Arrange nodes">Auto layout</button>
     <button id="save" class="secondary" title="Save graph">Save</button>
@@ -56,6 +56,6 @@
     </aside>
   </main>
   <dialog id="connect-dialog"><form method="dialog"><h2>Create relationship</h2><label>Target<select id="connect-target"></select></label><label>Type<select id="connect-type"></select></label><menu><button value="cancel" class="secondary">Cancel</button><button id="confirm-connect" value="default">Create</button></menu></form></dialog>
-  <script type="module" src="/app.js"></script>
+  <script type="module" src="/context-graph/app.js"></script>
 </body>
 </html>

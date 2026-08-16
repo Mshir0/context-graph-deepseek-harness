@@ -1,5 +1,6 @@
 const $ = (selector) => document.querySelector(selector);
 const NS = 'http://www.w3.org/2000/svg';
+const API = '/context-graph/api';
 const scopes = ['code', 'context', 'interface', 'state', 'decisions', 'history'];
 const relationTypes = ['dependency', 'reference', 'interface', 'data', 'optional', 'force_include', 'force_exclude'];
 const state = { graph: null, selected: null, zoom: 1, pan: { x: 0, y: 0 }, drag: null, suggestions: [] };
@@ -126,7 +127,7 @@ function showPreview(result) {
 }
 
 async function load() {
-  try { setStatus('Loading…'); const config = await request('/api/config'); $('#project').value = config.projectPath; state.graph = await request(`/api/graph?project=${encodeURIComponent(project())}`); render(); renderSuggestions(); setStatus('Ready'); }
+  try { setStatus('Loading…'); const config = await request(`${API}/config`); $('#project').replaceChildren(...config.workspaces.map(value => new Option(value, value))); $('#project').value = config.projectPath; $('#budget').value = config.tokenBudget || 16000; state.graph = await request(`${API}/graph?project=${encodeURIComponent(project())}`); render(); renderSuggestions(); setStatus('Ready'); }
   catch (error) { setStatus(error.message, true); }
 }
 
@@ -147,8 +148,8 @@ $('#edge-type').onchange = (event) => { state.graph.edges[state.selected.index].
 $('#delete-node').onclick = () => { const id = state.selected.id; state.graph.nodes = state.graph.nodes.filter((node) => node.id !== id); state.graph.edges = state.graph.edges.filter((edge) => edge.source !== id && edge.target !== id); select(null); }; $('#delete-edge').onclick = () => { state.graph.edges.splice(state.selected.index, 1); select(null); };
 $('#add-node').onclick = () => { const id = prompt('Module id'); if (!id || state.graph.nodes.some((node) => node.id === id)) return; state.graph.nodes.push({ id, label: id, path: '', mode: 'AUTO', scope: ['interface', 'state'], x: 120, y: 120 }); select({ kind: 'node', id }); };
 $('#connect').onclick = () => { $('#connect-target').value = state.graph.nodes.find((node) => node.id !== state.selected.id)?.id || ''; $('#connect-dialog').showModal(); }; $('#confirm-connect').onclick = (event) => { event.preventDefault(); const target = $('#connect-target').value, source = state.selected.id; if (target && target !== source) state.graph.edges.push({ source, target, type: $('#connect-type').value, scope: $('#connect-type').value === 'interface' ? ['interface'] : ['interface', 'state'], mode: 'AUTO' }); $('#connect-dialog').close(); render(); };
-$('#scan').onclick = async () => { try { setStatus('Scanning…'); const result = await request('/api/scan', { method: 'POST', body: JSON.stringify({ projectPath: project() }) }); state.graph = result.graph; state.suggestions = result.suggestions; render(); renderSuggestions(); setStatus(`${result.codeGraph.modules.length} modules`); } catch (error) { setStatus(error.message, true); } };
-$('#save').onclick = async () => { try { setStatus('Saving…'); state.graph = await request('/api/graph', { method: 'POST', body: JSON.stringify({ projectPath: project(), graph: state.graph }) }); setStatus('Saved'); } catch (error) { setStatus(error.message, true); } };
-$('#compile').onclick = async () => { try { const result = await request('/api/compile', { method: 'POST', body: JSON.stringify({ projectPath: project(), graph: state.graph, target: $('#target').value, task: $('#task').value, tokenBudget: Number($('#budget').value) }) }); showPreview(result); } catch (error) { $('#preview-result').textContent = error.message; } };
-$('#project').addEventListener('change', async () => { try { state.graph = await request(`/api/graph?project=${encodeURIComponent(project())}`); state.selected = null; render(); renderInspector(); } catch (error) { setStatus(error.message, true); } });
+$('#scan').onclick = async () => { try { setStatus('Scanning…'); const result = await request(`${API}/scan`, { method: 'POST', body: JSON.stringify({ projectPath: project() }) }); state.graph = result.graph; state.suggestions = result.suggestions; render(); renderSuggestions(); setStatus(`${result.codeGraph.modules.length} modules`); } catch (error) { setStatus(error.message, true); } };
+$('#save').onclick = async () => { try { setStatus('Saving…'); state.graph = await request(`${API}/graph`, { method: 'POST', body: JSON.stringify({ projectPath: project(), graph: state.graph }) }); setStatus('Saved'); } catch (error) { setStatus(error.message, true); } };
+$('#compile').onclick = async () => { try { const result = await request(`${API}/compile`, { method: 'POST', body: JSON.stringify({ projectPath: project(), graph: state.graph, target: $('#target').value, task: $('#task').value, tokenBudget: Number($('#budget').value) }) }); showPreview(result); } catch (error) { $('#preview-result').textContent = error.message; } };
+$('#project').addEventListener('change', async () => { try { state.graph = await request(`${API}/graph?project=${encodeURIComponent(project())}`); state.selected = null; render(); renderInspector(); } catch (error) { setStatus(error.message, true); } });
 load();

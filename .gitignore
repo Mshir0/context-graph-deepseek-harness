@@ -1,7 +1,9 @@
 .context/
 .env
 node_modules/
+.pnpm-store/
 coverage/
+.dsh-test/
 *.log
 __pycache__/
 *.pyc

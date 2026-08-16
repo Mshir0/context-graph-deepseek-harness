@@ -1,18 +1,46 @@
 {
-  "name": "context-graph-deepseek-harness",
-  "version": "0.1.0",
-  "description": "Visual context graph and budget-aware context compiler for AI coding agents",
+  "name": "dsh-context-graph",
+  "version": "0.2.0",
+  "description": "Native Context Graph and budget-aware context injection plugin for DeepSeek Harness",
   "type": "module",
-  "bin": {
-    "context-graph": "./bin/context-graph.js"
+  "packageManager": "pnpm@11.7.0",
+  "main": "./src/dsh-plugin.js",
+  "exports": {
+    ".": "./src/dsh-plugin.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src/",
+    "public/",
+    "schemas/",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
   },
   "scripts": {
-    "start": "node src/server.js",
     "test": "node --test",
-    "check": "node --check src/core.js && node --check src/server.js && node --check src/mcp.js"
+    "check": "node --check src/core.js && node --check src/dsh-plugin.js && node --check src/dsh-routes.js && node --check public/app.js"
   },
   "engines": {
-    "node": ">=20"
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-llm": ">=0.1.0-rc.5 <0.2.0",
+    "@deepseek-ai/dsh-tools": ">=0.1.0-rc.5 <0.2.0"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh-llm": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-tools": "0.1.0-rc.6"
+  },
+  "keywords": ["dsh-plugin", "deepseek-harness", "context-graph", "coding-agent"],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Mshir0/context-graph-deepseek-harness.git"
   },
   "license": "MIT"
 }

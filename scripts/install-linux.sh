@@ -2,20 +2,22 @@
 set -eu
 
 if ! command -v node >/dev/null 2>&1; then
-  echo "Node.js 20 or newer is required." >&2
+  echo "Node.js 22.19 or newer is required." >&2
   exit 1
 fi
-if ! command -v python3 >/dev/null 2>&1; then
-  echo "Python 3 is required for source analysis." >&2
+if ! command -v dsh >/dev/null 2>&1; then
+  echo "DeepSeek Harness (dsh) is required." >&2
   exit 1
 fi
 
 node_major=$(node -p "Number(process.versions.node.split('.')[0])")
-if [ "$node_major" -lt 20 ]; then
-  echo "Node.js 20 or newer is required (found $(node --version))." >&2
+if [ "$node_major" -lt 22 ]; then
+  echo "Node.js 22.19 or newer is required (found $(node --version))." >&2
   exit 1
 fi
 
-chmod +x bin/context-graph.js src/analyze_python.py scripts/install-linux.sh
-echo "Ready. Run: node src/server.js"
-echo "Then open: http://127.0.0.1:4317"
+profile=${DSH_PROFILE:-default}
+chmod +x src/analyze_python.py scripts/install-linux.sh
+dsh plugin --profile "$profile" add .
+echo "Installed into DeepSeek Harness profile: $profile"
+echo "Verify with: dsh --profile $profile --dump-config"

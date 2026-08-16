@@ -202,17 +202,6 @@ export async function compileContext({ projectPath, graph, target, task, tokenBu
   return { target, task, tokenBudget, estimatedTokens: used, overBudget: used > tokenBudget, included: included.map(({ content, ...item }) => item), excluded, context: text };
 }
 
-export async function streamDeepSeek({ apiKey, baseUrl = 'https://api.deepseek.com', model = 'deepseek-chat', system = '', context, task, signal }) {
-  if (!apiKey) throw new Error('DEEPSEEK_API_KEY is required');
-  const response = await fetch(`${baseUrl.replace(/\/$/, '')}/chat/completions`, {
-    method: 'POST', signal,
-    headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({ model, stream: true, messages: [{ role: 'system', content: system || context }, ...(system ? [{ role: 'system', content: context }] : []), { role: 'user', content: task }] }),
-  });
-  if (!response.ok || !response.body) throw new Error(`DeepSeek API ${response.status}: ${await response.text()}`);
-  return response.body;
-}
-
 export async function listProjects(parentPath) {
   const entries = await readdir(path.resolve(parentPath), { withFileTypes: true });
   return entries.filter((entry) => entry.isDirectory() && !entry.name.startsWith('.')).map((entry) => ({ name: entry.name, path: path.join(path.resolve(parentPath), entry.name) }));
