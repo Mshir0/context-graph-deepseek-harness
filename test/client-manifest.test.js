@@ -28,6 +28,9 @@ test('client adds a conversation view tab and sends through scoped conversation'
   assert.match(source, /__ModuleLoader__\.load/);
   assert.match(source, /slots\.register\(\{[\s\S]*name: 'conversation\.view'/);
   assert.match(source, /id: 'context-graph'/);
+  assert.match(source, /name: 'conversation\.input\.left'/);
+  assert.match(source, /function ContextCommand/);
+  assert.match(source, /function Inspector[\s\S]*window\.addEventListener\('pointermove'/);
   assert.match(source, /sessions\.scope\(sessionId\)/);
   assert.match(source, /conversation\.send\(text\)/);
   assert.match(source, /const selectItem = item =>/);

@@ -6,7 +6,8 @@ const { createElement: h, useCallback, useEffect, useMemo, useRef, useState } = 
 const styles = String.raw`
 .cg-root{--cg-line:#e5e7eb;--cg-muted:#6b7280;--cg-text:#171717;--cg-bg:#fff;--cg-soft:#f7f7f8;--cg-accent:#2563eb;display:grid;grid-template-rows:48px minmax(0,1fr) auto;height:100%;min-width:0;background:var(--cg-bg);color:var(--cg-text);font:13px/1.4 Inter,ui-sans-serif,system-ui,sans-serif}
 .cg-root *{box-sizing:border-box;letter-spacing:0}.cg-header{display:flex;align-items:center;gap:6px;padding:0 10px;border-bottom:1px solid var(--cg-line);min-width:0}.cg-title{font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-right:auto}.cg-icon{width:30px;height:30px;display:grid;place-items:center;border:0;border-radius:5px;background:transparent;color:#52525b;font-size:16px;cursor:pointer}.cg-icon:hover{background:#f1f1f2;color:#18181b}.cg-icon:disabled{opacity:.4;cursor:default}.cg-canvas-wrap{position:relative;min-height:0;overflow:hidden;background-color:#fafafa;background-image:radial-gradient(#d6d6d8 1px,transparent 1px);background-size:18px 18px}.cg-canvas{display:block;width:100%;height:100%;touch-action:none;cursor:grab}.cg-canvas[data-dragging=true]{cursor:grabbing}.cg-edge{fill:none;stroke:#a1a1aa;stroke-width:1.7}.cg-edge[data-type=interface]{stroke:#3b82f6}.cg-edge[data-type=dependency]{stroke:#d97706}.cg-edge[data-type=data]{stroke:#8b5cf6}.cg-edge[data-type=optional]{stroke-dasharray:6 5}.cg-edge[data-selected=true]{stroke:#111827;stroke-width:3}.cg-edge-hit{fill:none;stroke:transparent;stroke-width:13;cursor:pointer}.cg-temp{fill:none;stroke:#2563eb;stroke-width:2;stroke-dasharray:5 4}.cg-node{cursor:move}.cg-node-box{fill:white;stroke:#d4d4d8;stroke-width:1}.cg-node[data-selected=true] .cg-node-box{stroke:#2563eb;stroke-width:2}.cg-node[data-mode=FORCE_INCLUDE] .cg-node-box{stroke:#16a34a}.cg-node[data-mode=FORCE_EXCLUDE] .cg-node-box{stroke:#dc2626}.cg-node-head{fill:#f4f4f5}.cg-node-title{font-size:12px;font-weight:650;fill:#18181b;pointer-events:none}.cg-node-meta{font-size:10px;fill:#71717a;pointer-events:none}.cg-port{fill:#fff;stroke:#71717a;stroke-width:2;cursor:crosshair}.cg-port:hover{fill:#2563eb;stroke:#2563eb}.cg-tools{position:absolute;left:8px;top:8px;display:flex;gap:3px;padding:3px;background:#ffffffeb;border:1px solid var(--cg-line);border-radius:6px;box-shadow:0 2px 8px #0000000d}.cg-status{position:absolute;left:9px;bottom:8px;max-width:calc(100% - 18px);padding:4px 7px;border:1px solid var(--cg-line);border-radius:4px;background:#ffffffeb;color:var(--cg-muted);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cg-status[data-error=true]{color:#b91c1c}.cg-empty{position:absolute;inset:0;display:grid;place-content:center;text-align:center;color:var(--cg-muted);pointer-events:none}.cg-empty strong{color:#3f3f46;margin-bottom:4px}.cg-inspector{position:absolute;left:8px;right:8px;bottom:35px;max-height:48%;overflow:auto;background:#fff;border:1px solid var(--cg-line);border-radius:6px;box-shadow:0 8px 24px #00000014}.cg-inspector-head{display:flex;align-items:center;padding:8px 10px;border-bottom:1px solid var(--cg-line);font-weight:650}.cg-inspector-head span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-right:auto}.cg-form{padding:8px 10px}.cg-form label{display:block;margin:7px 0 3px;color:var(--cg-muted);font-size:11px}.cg-form input,.cg-form select,.cg-compose textarea,.cg-compose select{width:100%;border:1px solid #d4d4d8;border-radius:5px;background:#fff;color:#18181b;font:inherit;padding:7px 8px;outline:none}.cg-form input:focus,.cg-form select:focus,.cg-compose textarea:focus,.cg-compose select:focus{border-color:#60a5fa;box-shadow:0 0 0 2px #dbeafe}.cg-checks{display:flex;flex-wrap:wrap;gap:5px 9px}.cg-checks label{display:flex;align-items:center;gap:4px;margin:3px 0;color:#3f3f46}.cg-checks input{width:auto;box-shadow:none}.cg-row{display:flex;gap:6px}.cg-row>*{min-width:0;flex:1}.cg-danger{margin-top:8px;border:0;background:transparent;color:#dc2626;padding:5px 0;cursor:pointer}.cg-compose{padding:9px 10px 10px;border-top:1px solid var(--cg-line);background:#fff}.cg-compose-top{display:flex;gap:6px;margin-bottom:6px}.cg-compose-top select{flex:1}.cg-target{flex:1;min-width:0;color:var(--cg-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;align-self:center;font-size:11px}.cg-compose textarea{display:block;min-height:62px;max-height:140px;resize:vertical;padding-right:38px}.cg-textarea-wrap{position:relative}.cg-send{position:absolute;right:6px;bottom:6px;width:28px;height:28px;border:0;border-radius:5px;background:#18181b;color:#fff;cursor:pointer}.cg-send:disabled{opacity:.35;cursor:default}.cg-help{position:absolute;inset:12px;z-index:4;background:#fff;border:1px solid var(--cg-line);border-radius:6px;box-shadow:0 12px 34px #0002;padding:13px;overflow:auto}.cg-help h3{font-size:14px;margin:0 0 10px}.cg-help dl{display:grid;grid-template-columns:auto 1fr;gap:7px 12px;margin:0}.cg-help dt{font-family:ui-monospace,monospace;color:#18181b}.cg-help dd{margin:0;color:var(--cg-muted)}.cg-launcher{width:28px;height:28px;display:grid;place-items:center;border:0;border-radius:5px;background:transparent;color:inherit;font-size:15px;cursor:pointer}.cg-launcher:hover{background:color-mix(in srgb,currentColor 9%,transparent)}
-body[data-ds-dark-theme] .cg-root{--cg-line:#34343a;--cg-muted:#a1a1aa;--cg-text:#f4f4f5;--cg-bg:#18181b;--cg-soft:#27272a}body[data-ds-dark-theme] .cg-canvas-wrap{background-color:#1c1c1f;background-image:radial-gradient(#3f3f46 1px,transparent 1px)}body[data-ds-dark-theme] .cg-node-box,body[data-ds-dark-theme] .cg-form input,body[data-ds-dark-theme] .cg-form select,body[data-ds-dark-theme] .cg-compose textarea,body[data-ds-dark-theme] .cg-compose select{fill:#202023;background:#202023;color:#f4f4f5;border-color:#3f3f46}body[data-ds-dark-theme] .cg-node-head{fill:#2b2b30}body[data-ds-dark-theme] .cg-node-title{fill:#f4f4f5}body[data-ds-dark-theme] .cg-node-meta{fill:#a1a1aa}body[data-ds-dark-theme] .cg-tools,body[data-ds-dark-theme] .cg-status,body[data-ds-dark-theme] .cg-inspector,body[data-ds-dark-theme] .cg-help{background:#202023eb;border-color:#3f3f46}body[data-ds-dark-theme] .cg-icon{color:#d4d4d8}body[data-ds-dark-theme] .cg-icon:hover{background:#303036;color:#fff}body[data-ds-dark-theme] .cg-compose{background:#18181b}body[data-ds-dark-theme] .cg-send{background:#f4f4f5;color:#18181b}body[data-ds-dark-theme] .cg-checks label{color:#d4d4d8}body[data-ds-dark-theme] .cg-help dt{color:#f4f4f5}
+.cg-context-button{border:0;background:transparent;color:inherit;font:inherit;padding:4px 6px;border-radius:4px;cursor:pointer}.cg-context-button:hover{background:#f1f1f2}.cg-context-menu{position:fixed;z-index:50;width:300px;padding:10px;background:#fff;border:1px solid #d4d4d8;border-radius:6px;box-shadow:0 12px 32px #0002}.cg-context-menu label{display:block;margin:7px 0 3px;font-size:12px;color:#71717a}.cg-context-menu select,.cg-context-menu textarea{width:100%;border:1px solid #d4d4d8;border-radius:4px;padding:7px;font:inherit}.cg-context-menu textarea{min-height:86px;resize:vertical}.cg-context-target{margin:7px 0;color:#52525b;font-size:12px}.cg-context-menu button{margin-top:8px;border:0;border-radius:4px;padding:7px 9px;background:#18181b;color:#fff;cursor:pointer}
+body[data-ds-dark-theme] .cg-root{--cg-line:#34343a;--cg-muted:#a1a1aa;--cg-text:#f4f4f5;--cg-bg:#18181b;--cg-soft:#27272a}body[data-ds-dark-theme] .cg-canvas-wrap{background-color:#1c1c1f;background-image:radial-gradient(#3f3f46 1px,transparent 1px)}body[data-ds-dark-theme] .cg-node-box,body[data-ds-dark-theme] .cg-form input,body[data-ds-dark-theme] .cg-form select,body[data-ds-dark-theme] .cg-compose textarea,body[data-ds-dark-theme] .cg-compose select{fill:#202023;background:#202023;color:#f4f4f5;border-color:#3f3f46}body[data-ds-dark-theme] .cg-node-head{fill:#2b2b30}body[data-ds-dark-theme] .cg-node-title{fill:#f4f4f5}body[data-ds-dark-theme] .cg-node-meta{fill:#a1a1aa}body[data-ds-dark-theme] .cg-tools,body[data-ds-dark-theme] .cg-status,body[data-ds-dark-theme] .cg-inspector,body[data-ds-dark-theme] .cg-help{background:#202023eb;border-color:#3f3f46}body[data-ds-dark-theme] .cg-icon{color:#d4d4d8}.cg-context-menu{background:#202023;color:#f4f4f5}
 `;
 
 const API = '/context-graph/api';
@@ -83,13 +84,23 @@ function Checks({ value = [], onChange }) {
     h('input', { type: 'checkbox', checked: value.includes(scope), onChange: event => onChange(event.target.checked ? [...value, scope] : value.filter(item => item !== scope)) }), scope)));
 }
 
+function ContextCommand({ sessionId, inputActions, targetStore }) {
+  const [open, setOpen] = useState(false); const [taskType, setTaskType] = useState('develop'); const [task, setTask] = useState(''); const [target, setTarget] = useState(() => targetStore.get(sessionId)); const buttonRef = useRef(null);
+  useEffect(() => targetStore.subscribe(sessionId, setTarget), [sessionId, targetStore]);
+  const addToDraft = () => { const label = TASKS.find(([key]) => key === taskType)?.[1] || taskType; inputActions.setDraft(`任务类型：${label}${target ? `\n目标模块：${target}` : ''}\n\n${task}`.trim()); setOpen(false); };
+  const rect = open ? buttonRef.current?.getBoundingClientRect() : null;
+  return h('div', null, h('button', { ref: buttonRef, type: 'button', className: 'cg-context-button', title: '上下文任务', onClick: () => setOpen(value => !value) }, '上下文'), open && rect ? h('section', { className: 'cg-context-menu', style: { left: rect.left, bottom: window.innerHeight - rect.top + 8 } }, h('label', null, '任务类型'), h('select', { value: taskType, onChange: event => setTaskType(event.target.value) }, TASKS.map(([key, label]) => h('option', { key, value: key }, label))), h('div', { className: 'cg-context-target' }, target ? `目标：${target}` : '目标：自动识别'), h('label', null, '任务内容'), h('textarea', { value: task, placeholder: '输入任务内容…', onChange: event => setTask(event.target.value) }), h('button', { type: 'button', onClick: addToDraft }, '添加到输入框')) : null);
+}
+
 function Inspector({ graph, selected, updateNode, updateEdge, remove }) {
+  const [position, setPosition] = useState(null);
   if (!selected) return null;
   const item = selected.kind === 'node' ? graph.nodes.find(node => node.id === selected.id) : graph.edges[selected.index];
   if (!item) return null;
   const title = selected.kind === 'node' ? (item.label || item.id) : `${item.source} → ${item.target}`;
-  return h('section', { className: 'cg-inspector' },
-    h('div', { className: 'cg-inspector-head' }, h('span', null, title)),
+  const drag = event => { const start = { x: event.clientX, y: event.clientY, left: position?.left ?? event.currentTarget.parentElement.getBoundingClientRect().left, top: position?.top ?? event.currentTarget.parentElement.getBoundingClientRect().top }; const move = next => setPosition({ left: Math.max(8, start.left + next.clientX - start.x), top: Math.max(8, start.top + next.clientY - start.y) }); const stop = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', stop); }; window.addEventListener('pointermove', move); window.addEventListener('pointerup', stop, { once: true }); };
+  return h('section', { className: 'cg-inspector', style: position ? { left: position.left, top: position.top, right: 'auto', bottom: 'auto', width: 300 } : undefined },
+    h('div', { className: 'cg-inspector-head', onPointerDown: drag }, h('span', null, title)),
     h('div', { className: 'cg-form' }, selected.kind === 'node' ? [
       h('label', { key: 'lp' }, '模块路径'),
       h('input', { key: 'p', value: item.path || '', onChange: event => updateNode({ path: event.target.value }) }),
@@ -106,7 +117,7 @@ function Inspector({ graph, selected, updateNode, updateEdge, remove }) {
     ], h('button', { className: 'cg-danger', type: 'button', onClick: remove }, selected.kind === 'node' ? '删除节点' : '删除连接')));
 }
 
-function GraphPanel({ sessionId, projectPath, sendPrompt }) {
+function GraphPanel({ sessionId, projectPath, sendPrompt, setTarget }) {
   const [graph, setGraph] = useState(null);
   const [selected, setSelected] = useState(null);
   const [inspected, setInspected] = useState(null);
@@ -187,6 +198,7 @@ function GraphPanel({ sessionId, projectPath, sendPrompt }) {
     const doublePressed = pressRef.current.key === key && now - pressRef.current.time <= DOUBLE_PRESS_MS;
     pressRef.current = { key, time: now };
     setSelected(item);
+    if (item.kind === 'node') setTarget(item.id);
     setInspected(doublePressed ? item : null);
   };
   const point = event => graphPoint(svgRef.current, view, event.clientX, event.clientY);
@@ -233,9 +245,7 @@ function GraphPanel({ sessionId, projectPath, sendPrompt }) {
       h(Inspector, { graph: graph || { nodes: [], edges: [] }, selected: inspected, updateNode, updateEdge, remove }),
       help ? h('section', { className: 'cg-help' }, h('h3', null, '快捷键'), h('dl', null,
         h('dt', null, 'Ctrl/⌘ + S'), h('dd', null, '保存图谱'), h('dt', null, 'Ctrl/⌘ + Enter'), h('dd', null, '发送任务'), h('dt', null, 'Delete'), h('dd', null, '删除所选节点或连接'), h('dt', null, 'F'), h('dd', null, '适合画布'), h('dt', null, 'A'), h('dd', null, '自动排布'), h('dt', null, 'Esc'), h('dd', null, '取消连接或选择'), h('dt', null, '拖动端口'), h('dd', null, '手动创建连接'))) : null),
-    h('footer', { className: 'cg-compose' },
-      h('div', { className: 'cg-compose-top' }, h('select', { value: taskType, onChange: event => setTaskType(event.target.value), 'aria-label': '任务类型' }, TASKS.map(([key, label]) => h('option', { key, value: key }, label))), h('div', { className: 'cg-target', title: selected?.kind === 'node' ? selected.id : '' }, selected?.kind === 'node' ? `目标：${selected.id}` : '自动识别目标模块')),
-      h('div', { className: 'cg-textarea-wrap' }, h('textarea', { value: task, placeholder: '输入任务提示词…', onChange: event => setTask(event.target.value), onKeyDown: event => { if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') { event.preventDefault(); void submit(); } } }), h('button', { className: 'cg-send', type: 'button', title: '发送到当前会话', 'aria-label': '发送到当前会话', disabled: !task.trim() || sending, onClick: () => void submit() }, '↑'))));
+    );
 }
 
 const inject = ['slots', 'sessions'];
@@ -250,7 +260,10 @@ function apply(ctx) {
   }, 'context-graph: styles');
 
   ctx.inject(['slots', 'sessions', 'conversation'], scope => {
-    return scope.slots.inject('conversation.view', () => scope.slots.register({
+    const targetListeners = new Map(); const targets = new Map();
+    const targetStore = { get: id => targets.get(id) || '', set: (id, value) => { targets.set(id, value); for (const listener of targetListeners.get(id) || []) listener(value); }, subscribe: (id, listener) => { const listeners = targetListeners.get(id) || new Set(); listeners.add(listener); targetListeners.set(id, listeners); return () => listeners.delete(listener); } };
+    const disposeContext = scope.slots.inject('conversation.input.left', () => scope.slots.register({ name: 'conversation.input.left', id: 'context-graph-task', order: 100, registrant: 'dsh-context-graph', inject: sessionId => ({ sessionId, targetStore }) }, ContextCommand));
+    const disposeView = scope.slots.inject('conversation.view', () => scope.slots.register({
       name: 'conversation.view',
       id: 'context-graph',
       order: 20,
@@ -261,6 +274,7 @@ function apply(ctx) {
         return {
           sessionId,
           projectPath,
+          setTarget: value => targetStore.set(sessionId, value),
           sendPrompt: async text => {
             const sessionScope = scope.sessions.scope(sessionId);
             const conversation = sessionScope?.get('conversation');
@@ -270,6 +284,7 @@ function apply(ctx) {
         };
       },
     }, GraphPanel));
+    return () => { disposeContext(); disposeView(); };
   });
 }
 
