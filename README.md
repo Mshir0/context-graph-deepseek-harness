@@ -59,6 +59,12 @@ pnpm dsh web
 - `context_select`：为当前 DSH Session 指定目标模块以及强制加入/排除项。
 - `context_compile`：预览 token 预算下最终会注入的上下文。
 - `context_git_summary`：读取当前 workspace 的相关 Git 状态和历史。
+- `dependency_discover_modules`：只读发现 Python 模块、符号和可选变更文件的增量事实。
+- `dependency_analyze_module` / `dependency_analyze_dependencies`：读取模块关系、接口与证据。
+- `dependency_find_callers` / `dependency_find_callees` / `dependency_find_related_modules`：查询调用与直接模块关系。
+- `dependency_extract_interface`：读取函数和类的输入、输出与定义证据。
+- `dependency_propose_context_edges` / `dependency_check_consistency`：生成非绑定 Edge 建议，并检查缺失、陈旧和被用户保护的关系；不会写入 Graph。
+- `dependency_validate_relationship` / `dependency_detect_changes`：验证单条 Edge，或比较保留的前一次事实 JSON 与当前代码关系。
 
 当 `autoInject` 开启时，插件会在每次 `agent/pre-step`：
 
@@ -69,6 +75,10 @@ pnpm dsh web
 5. 对相同任务和相同内容去重，避免每个 step 重复膨胀上下文。
 
 如果目标模块无法可靠推断，插件不会猜测或加载全工程；Agent 可调用 `context_select` 明确目标。
+
+## Dependency & Interface Skill
+
+`skills/dependency-interface/SKILL.md` 随插件发布。它将 Python AST 分析作为独立的工程依赖事实发现层：输出模块、符号级关系、接口 Contract、代码证据及置信度；不保存 Context Graph、不修改业务代码，也不决定模型最终上下文。Context Graph 的更新仍必须经 `context_graph_save` 显式确认，`FORCE_INCLUDE` 和 `FORCE_EXCLUDE` 永远优先于自动分析。
 
 ## Harness 对话视图
 

@@ -12,6 +12,20 @@ import {
 } from './core.js';
 import { registerContextGraphRoutes } from './dsh-routes.js';
 import { escapeAttribute, inferTarget, latestUserText, preview } from './dsh-context.js';
+import {
+  analyzeDependencies,
+  analyzeModule,
+  analyzeModuleDependencies,
+  checkConsistency,
+  detectGraphChanges,
+  discoverModules,
+  extractInterface,
+  findCallees,
+  findCallers,
+  findRelatedModules,
+  proposeContextEdges,
+  validateRelationship,
+} from './dependency-skill.js';
 
 export const name = 'context-graph';
 export const inject = ['agents', 'sessions', 'tools', 'systemPrompt'];
@@ -140,6 +154,48 @@ function registerTools(ctx, config, sessionState) {
     async execute(args, exec) { return JSON.stringify(await gitSummary(workspaceOf(exec), args.target_path || ''), null, 2); },
   }));
 
+  registerDependencyTools(ctx);
+
+}
+
+function registerDependencyTools(ctx) {
+  const factsFor = async (exec, files = []) => analyzeDependencies(workspaceOf(exec), { files });
+  const moduleTool = (name, description, execute) => ctx.tools.register(textTool({ name, description, parameters: {
+    module: { type: 'string', required: true, description: 'Python module id from dependency_discover_modules.' },
+  }, execute }));
+
+  ctx.tools.register(textTool({
+    name: 'dependency_discover_modules',
+    description: 'Read Python modules and symbols using the Dependency Skill. This does not modify code or Context Graph.',
+    parameters: { files: { type: 'array', items: { type: 'string' }, description: 'Optional changed project-relative Python files for incremental analysis.' } },
+    async execute(args, exec) { const facts = await factsFor(exec, args.files || []); return JSON.stringify({ modules: discoverModules(facts), errors: facts.errors, analyzed_files: facts.analyzed_files }, null, 2); },
+  }));
+  moduleTool('dependency_analyze_module', 'Read a module, its code relationships, and its extracted interfaces.', async (args, exec) => JSON.stringify(analyzeModule(await factsFor(exec), args.module), null, 2));
+  moduleTool('dependency_analyze_dependencies', 'Read outgoing dependency facts for a module, including evidence and confidence.', async (args, exec) => JSON.stringify(analyzeModuleDependencies(await factsFor(exec), args.module), null, 2));
+  moduleTool('dependency_find_related_modules', 'Find direct callers and callees at module level without deciding context selection.', async (args, exec) => JSON.stringify(findRelatedModules(await factsFor(exec), args.module), null, 2));
+  moduleTool('dependency_extract_interface', 'Extract public Python function and class contracts for a module.', async (args, exec) => JSON.stringify(extractInterface(await factsFor(exec), args.module), null, 2));
+  moduleTool('dependency_propose_context_edges', 'Produce non-binding Context Graph edge proposals from internal dependency facts. Does not save anything.', async (args, exec) => JSON.stringify(proposeContextEdges(await factsFor(exec), args.module), null, 2));
+
+  ctx.tools.register(textTool({
+    name: 'dependency_find_callers', description: 'Find AST-confirmed callers of a symbol.', parameters: { symbol: { type: 'string', required: true, description: 'Qualified or suffix symbol name.' } },
+    async execute(args, exec) { return JSON.stringify(findCallers(await factsFor(exec), args.symbol), null, 2); },
+  }));
+  ctx.tools.register(textTool({
+    name: 'dependency_find_callees', description: 'Find AST-confirmed calls made by a function or method.', parameters: { symbol: { type: 'string', required: true, description: 'Qualified or suffix caller symbol name.' } },
+    async execute(args, exec) { return JSON.stringify(findCallees(await factsFor(exec), args.symbol), null, 2); },
+  }));
+  ctx.tools.register(textTool({
+    name: 'dependency_validate_relationship', description: 'Validate one Context Graph edge against current code facts; returns evidence and confidence only.', parameters: { source: { type: 'string', required: true }, target: { type: 'string', required: true } },
+    async execute(args, exec) { return JSON.stringify(validateRelationship(await factsFor(exec), args), null, 2); },
+  }));
+  ctx.tools.register(textTool({
+    name: 'dependency_check_consistency', description: 'Report missing, stale, protected, and force-exclude conflict edges. Never changes Context Graph.', parameters: {},
+    async execute(_args, exec) { const root = workspaceOf(exec); return JSON.stringify(checkConsistency(await factsFor(exec), await loadGraph(root)), null, 2); },
+  }));
+  ctx.tools.register(textTool({
+    name: 'dependency_detect_changes', description: 'Compare a previous Dependency Skill JSON result with current facts and return added/removed relationships.', parameters: { previous_facts_json: { type: 'string', required: true, description: 'Earlier complete Dependency Skill JSON result.' }, files: { type: 'array', items: { type: 'string' }, description: 'Optional changed files for incremental current analysis.' } },
+    async execute(args, exec) { return JSON.stringify(detectGraphChanges(JSON.parse(args.previous_facts_json), await factsFor(exec, args.files || []), { files: args.files || [] }), null, 2); },
+  }));
 }
 
 function textTool(definition) {

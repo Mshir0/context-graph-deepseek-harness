@@ -12,6 +12,7 @@
   },
   "files": [
     "src/",
+    "skills/",
     "schemas/",
     "cordis.patch.yml",
     "README.md",
@@ -31,7 +32,7 @@
   },
   "scripts": {
     "test": "node --test",
-    "check": "node --check src/core.js && node --check src/dsh-plugin.js && node --check src/dsh-routes.js && node --check src/client/index.js"
+    "check": "node --check src/core.js && node --check src/dsh-plugin.js && node --check src/dsh-routes.js && node --check src/dependency-skill.js && node --check src/client/index.js"
   },
   "engines": {
     "node": "^22.19.0 || >=24.0.0"
