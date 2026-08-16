@@ -14,10 +14,15 @@
         "required": ["id"],
         "properties": {
           "id": { "type": "string", "minLength": 1 },
-          "type": { "enum": ["code_module", "requirement", "task", "constraint", "decision", "interface", "documentation", "conversation", "artifact", "test", "issue", "note", "project_rule"] },
+          "type": { "enum": ["functional", "code_module", "implementation_file", "implementation_class", "implementation_function", "implementation_package", "implementation_symbol", "requirement", "task", "constraint", "decision", "interface", "documentation", "conversation", "artifact", "test", "issue", "note", "project_rule"] },
           "title": { "type": "string" },
           "label": { "type": "string" },
           "content": { "type": "string" },
+          "description": { "type": "string" },
+          "provides": { "type": "array", "items": { "type": "string" } },
+          "consumes": { "type": "array", "items": { "type": "string" } },
+          "inputs": { "type": "array", "items": { "type": "string" } },
+          "outputs": { "type": "array", "items": { "type": "string" } },
           "source": { "type": "string" },
           "priority": { "enum": ["critical", "high", "normal", "low"] },
           "status": { "enum": ["active", "resolved", "deprecated", "superseded", "archived"] },
@@ -41,13 +46,29 @@
         "properties": {
           "source": { "type": "string" },
           "target": { "type": "string" },
-          "type": { "enum": ["dependency", "reference", "interface", "data", "optional", "force_include", "force_exclude", "depends_on", "calls", "references", "affects", "constrains", "implements", "derived_from", "conflicts_with", "supersedes", "related_to", "contains", "uses", "produces", "tests", "documents", "targets", "requires", "constrained_by", "applies_to"] },
+          "type": { "enum": ["dependency", "reference", "interface", "data", "optional", "force_include", "force_exclude", "depends_on", "calls", "references", "affects", "constrains", "implements", "implemented_by", "derived_from", "conflicts_with", "supersedes", "related_to", "contains", "uses", "provides", "consumes", "produces", "feeds", "transforms", "triggers", "tests", "documents", "targets", "requires", "constrained_by", "applies_to"] },
           "mode": { "enum": ["AUTO", "MANUAL", "FORCE_INCLUDE", "FORCE_EXCLUDE"] },
           "scope": { "$ref": "#/$defs/scope" },
           "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
           "metadata": { "type": "object" }
         },
         "additionalProperties": false
+      }
+    },
+    "mappings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["functional", "implementation"],
+        "properties": {
+          "functional": { "type": "string" },
+          "implementation": { "type": "array", "items": { "oneOf": [{ "type": "string" }, { "type": "object", "required": ["id"], "properties": { "id": { "type": "string" }, "path": { "type": "string" }, "capabilities": { "type": "array", "items": { "type": "string" } } }, "additionalProperties": true }] } },
+          "evidence": { "type": "array", "items": { "type": "string" } },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+          "created_by": { "enum": ["auto", "ai", "user"] },
+          "mode": { "enum": ["AUTO", "MANUAL", "FORCE_INCLUDE", "FORCE_EXCLUDE"] }
+        },
+        "additionalProperties": true
       }
     },
     "overrides": {

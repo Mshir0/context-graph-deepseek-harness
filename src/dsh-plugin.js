@@ -13,6 +13,7 @@ import {
 import { registerContextGraphRoutes } from './dsh-routes.js';
 import { escapeAttribute, inferTarget, latestUserText, preview } from './dsh-context.js';
 import { applyExtraction, detectContextConflicts, extractContext } from './context-extraction.js';
+import { applyFunctionalInference, inferFunctionalModules, mergeFunctionalNodes, splitFunctionalNode } from './semantic-functional.js';
 import {
   analyzeDependencies,
   analyzeModule,
@@ -42,7 +43,7 @@ export function apply(ctx, input = {}) {
   ctx.systemPrompt.section({
     name: 'context-graph:policy',
     order: 99,
-    text: 'Use context_graph_scan when project structure changes. Use context_extract to propose durable Task, Requirement, Constraint, or Decision nodes from important conversation content; do not apply uncertain proposals. Before modifying a module, use context_select or context_compile when the entry is ambiguous. Treat raw conversation and Code Graph dependencies as evidence, not automatic context policy; preserve MANUAL, FORCE_INCLUDE, and FORCE_EXCLUDE choices.',
+    text: 'Treat the Semantic Functional Graph as WHAT the system does and the Implementation Graph as HOW code realizes it. Use context_graph_scan for implementation changes and functional_infer only for reviewed Functional proposals. Never expose imports or calls as Functional edges. Use context_extract for durable structured knowledge. Compile from Task or Functional entries, resolve only relevant implementation mappings, and preserve MANUAL, FORCE_INCLUDE, and FORCE_EXCLUDE choices.',
   });
 
   ctx.on('agent/session-start', ({ agent }) => {
@@ -91,6 +92,33 @@ function registerTools(ctx, config, sessionState) {
       await saveGraph(root, result.graph);
       return JSON.stringify({ modules: result.codeGraph.modules.length, analyzerErrors: result.codeGraph.errors, suggestions: result.suggestions }, null, 2);
     },
+  }));
+
+  ctx.tools.register(textTool({
+    name: 'functional_infer',
+    description: 'Infer non-binding Functional Node and Functional-to-Implementation mapping proposals from implementation dependency facts. Code calls are never directly exposed as semantic edges.',
+    parameters: { apply: { type: 'boolean', description: 'Persist inferred functional nodes, mappings, and semantic edge proposals after review.' } },
+    async execute(args, exec) {
+      const root = workspaceOf(exec); const graph = await loadGraph(root); const facts = await analyzeDependencies(root); const implementationGraph = reconcileGraphs({ modules: facts.modules.map(module => ({ ...module, imports: [] })) }, graph).graph;
+      const proposal = inferFunctionalModules(implementationGraph, facts);
+      if (args.apply === true) { const saved = await saveGraph(root, applyFunctionalInference(implementationGraph, proposal)); return JSON.stringify({ applied: true, proposal, graph: saved }, null, 2); }
+      return JSON.stringify({ applied: false, proposal }, null, 2);
+    },
+  }));
+
+  ctx.tools.register(textTool({
+    name: 'functional_map_implementation', description: 'Save one approved many-to-many Functional to Implementation mapping. This changes graph metadata only, never source code.', parameters: { functional: { type: 'string', required: true }, implementation_ids: { type: 'array', items: { type: 'string' }, required: true }, mode: { type: 'string', description: 'MANUAL by default.' } },
+    async execute(args, exec) { const root = workspaceOf(exec); const graph = await loadGraph(root); if (!graph.nodes.some(node => node.id === args.functional && node.type === 'functional')) throw new Error(`Unknown functional node: ${args.functional}`); for (const id of args.implementation_ids) if (!graph.nodes.some(node => node.id === id)) throw new Error(`Unknown implementation node: ${id}`); graph.mappings.push({ functional: args.functional, implementation: args.implementation_ids.map(id => { const node = graph.nodes.find(item => item.id === id); return { id, path: node.path || '' }; }), confidence: 1, created_by: 'user', mode: args.mode || 'MANUAL' }); return JSON.stringify(await saveGraph(root, graph), null, 2); },
+  }));
+
+  ctx.tools.register(textTool({
+    name: 'functional_merge', description: 'Merge approved Functional Nodes and their implementation mappings without modifying source code.', parameters: { source_ids: { type: 'array', items: { type: 'string' }, required: true }, merged_node_json: { type: 'string', required: true } },
+    async execute(args, exec) { const root = workspaceOf(exec); return JSON.stringify(await saveGraph(root, mergeFunctionalNodes(await loadGraph(root), args.source_ids, JSON.parse(args.merged_node_json))), null, 2); },
+  }));
+
+  ctx.tools.register(textTool({
+    name: 'functional_split', description: 'Split one approved Functional Node into semantic nodes with selected implementation mappings without modifying source code.', parameters: { source_id: { type: 'string', required: true }, splits_json: { type: 'string', required: true, description: 'Array of Functional Nodes with implementation id arrays.' } },
+    async execute(args, exec) { const root = workspaceOf(exec); return JSON.stringify(await saveGraph(root, splitFunctionalNode(await loadGraph(root), args.source_id, JSON.parse(args.splits_json))), null, 2); },
   }));
 
   ctx.tools.register(textTool({

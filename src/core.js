@@ -3,18 +3,19 @@ import { mkdir, readFile, writeFile, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import { implementationForFunctional } from './semantic-functional.js';
 
 const execFileAsync = promisify(execFile);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-export const CONTEXT_NODE_TYPES = ['code_module', 'requirement', 'task', 'constraint', 'decision', 'interface', 'documentation', 'conversation', 'artifact', 'test', 'issue', 'note', 'project_rule'];
-export const RELATION_TYPES = ['dependency', 'reference', 'interface', 'data', 'optional', 'force_include', 'force_exclude', 'depends_on', 'calls', 'references', 'affects', 'constrains', 'implements', 'derived_from', 'conflicts_with', 'supersedes', 'related_to', 'contains', 'uses', 'produces', 'tests', 'documents', 'targets', 'requires', 'constrained_by', 'applies_to'];
+export const CONTEXT_NODE_TYPES = ['functional', 'code_module', 'implementation_file', 'implementation_class', 'implementation_function', 'implementation_package', 'implementation_symbol', 'requirement', 'task', 'constraint', 'decision', 'interface', 'documentation', 'conversation', 'artifact', 'test', 'issue', 'note', 'project_rule'];
+export const RELATION_TYPES = ['dependency', 'reference', 'interface', 'data', 'optional', 'force_include', 'force_exclude', 'depends_on', 'calls', 'references', 'affects', 'constrains', 'implements', 'implemented_by', 'derived_from', 'conflicts_with', 'supersedes', 'related_to', 'contains', 'uses', 'provides', 'consumes', 'produces', 'feeds', 'transforms', 'triggers', 'tests', 'documents', 'targets', 'requires', 'constrained_by', 'applies_to'];
 export const MODES = ['AUTO', 'MANUAL', 'FORCE_INCLUDE', 'FORCE_EXCLUDE'];
 export const SCOPES = ['code', 'context', 'interface', 'contract', 'state', 'decisions', 'history', 'content'];
 const PRIORITIES = ['critical', 'high', 'normal', 'low'];
 const STATUSES = ['active', 'resolved', 'deprecated', 'superseded', 'archived'];
 
 export function emptyGraph(projectPath) {
-  return { version: 1, projectPath: path.resolve(projectPath), nodes: [], edges: [], overrides: { include: [], exclude: [] } };
+  return { version: 1, projectPath: path.resolve(projectPath), nodes: [], edges: [], mappings: [], overrides: { include: [], exclude: [] } };
 }
 
 function canonicalMode(value = 'AUTO') {
@@ -29,13 +30,15 @@ export function normalizeGraph(graph, projectPath = graph?.projectPath || proces
     ...base,
     projectPath: path.resolve(projectPath),
     overrides: { include: [...(base.overrides?.include || [])], exclude: [...(base.overrides?.exclude || [])] },
+    mappings: (base.mappings || []).map(mapping => ({ ...mapping, implementation: (mapping.implementation || []).map(item => typeof item === 'string' ? { id: item } : { ...item }), confidence: Number.isFinite(mapping.confidence) ? mapping.confidence : 1, created_by: mapping.created_by || 'user', mode: canonicalMode(mapping.mode || 'MANUAL') })),
     nodes: (base.nodes || []).map(node => ({
       ...node,
       type: CONTEXT_NODE_TYPES.includes(node.type) ? node.type : 'code_module',
       title: node.title || node.label || node.id,
       label: node.label || node.title || node.id,
-      content: typeof node.content === 'string' ? node.content : '',
-      source: node.source || ((node.type || 'code_module') === 'code_module' ? 'code' : 'user'),
+      content: typeof node.content === 'string' ? node.content : typeof node.description === 'string' ? node.description : '',
+      description: typeof node.description === 'string' ? node.description : typeof node.content === 'string' ? node.content : '',
+      source: node.source || ((node.type || 'code_module').startsWith('implementation_') || (node.type || 'code_module') === 'code_module' ? 'code' : 'user'),
       priority: PRIORITIES.includes(node.priority) ? node.priority : 'normal',
       status: STATUSES.includes(node.status) ? node.status : 'active',
       mode: canonicalMode(node.mode || 'AUTO'),
@@ -63,6 +66,10 @@ export function validateGraph(graph) {
     if (!RELATION_TYPES.includes(edge.type)) errors.push(`Unsupported relationship: ${edge.type}`);
     if (!MODES.includes(canonicalMode(edge.mode || 'AUTO'))) errors.push(`Unsupported mode: ${edge.mode}`);
     for (const scope of edge.scope || []) if (!SCOPES.includes(scope)) errors.push(`Unsupported scope: ${scope}`);
+  }
+  for (const mapping of graph?.mappings || []) {
+    if (!ids.has(mapping.functional) || graph.nodes.find(node => node.id === mapping.functional)?.type !== 'functional') errors.push(`Unknown functional mapping source: ${mapping.functional}`);
+    for (const item of mapping.implementation || []) if (!ids.has(typeof item === 'string' ? item : item.id)) errors.push(`Unknown implementation mapping target: ${typeof item === 'string' ? item : item.id}`);
   }
   return errors;
 }
@@ -170,7 +177,7 @@ export function reconcileGraphs(codeGraph, contextGraph) {
   const existing = new Set(graph.nodes.map((node) => node.id));
   for (const module of codeGraph.modules) {
     if (!existing.has(module.id)) {
-      graph.nodes.push({ id: module.id, title: module.id, label: module.id, type: 'code_module', source: 'code', path: module.path, mode: 'AUTO', ...nextNodePosition(graph.nodes) });
+      graph.nodes.push({ id: module.id, title: module.id, label: module.id, type: 'code_module', source: 'code', path: module.path, mode: 'AUTO', metadata: { layer: 'implementation', language: module.language }, ...nextNodePosition(graph.nodes) });
     }
   }
   const ids = new Set(codeGraph.modules.map((module) => module.id));
@@ -299,10 +306,21 @@ export async function compileModularContext({ projectPath, graph, entry, task = 
     if (currentInfo.depth >= 3) continue;
     for (const edge of graph.edges) {
       if (edge.type === 'derived_from') continue; // Raw messages remain trace-only by default.
+      if (['dependency', 'reference', 'calls'].includes(edge.type) && nodeMap.get(current)?.type === 'functional') continue;
       const next = edge.source === current ? edge.target : edge.target === current ? edge.source : null;
       if (!next || !nodeMap.has(next) || forceExclude.has(next)) continue;
+      if (nodeMap.get(current)?.type === 'functional' && (nodeMap.get(next)?.type === 'code_module' || nodeMap.get(next)?.type?.startsWith('implementation_'))) continue;
       if (edge.mode === 'FORCE_EXCLUDE' || edge.type === 'force_exclude') { forceExclude.add(next); continue; }
       if (!selected.has(next)) { selected.set(next, { depth: currentInfo.depth + 1, reason: `${edge.type} ${edge.source === current ? 'from' : 'to'} ${current}`, scope: edge.scope || [] }); queue.push(next); }
+    }
+  }
+  // A Functional Node is the semantic boundary. Resolve only its relevant
+  // implementation mapping after semantic traversal; never expand file calls.
+  for (const [id] of [...selected]) if (nodeMap.get(id)?.type === 'functional') {
+    for (const implementation of implementationForFunctional(graph, id, task)) {
+      if (nodeMap.has(implementation.id) && !forceExclude.has(implementation.id) && !selected.has(implementation.id)) {
+        selected.set(implementation.id, { depth: 2, reason: `implemented_by ${id}`, scope: ['code', 'interface'] });
+      }
     }
   }
   for (const id of forceInclude) if (nodeMap.has(id)) selected.set(id, { depth: 0, reason: 'FORCE_INCLUDE', scope: ['content', 'interface', 'contract', 'state', 'decisions'] });
@@ -318,8 +336,12 @@ export async function compileModularContext({ projectPath, graph, entry, task = 
     if (node.status !== 'active' && id !== entry) { excluded.push({ node: id, module: id, reason: node.status }); continue; }
     if (node.type === 'conversation' || node.metadata?.raw === true) { excluded.push({ node: id, module: id, reason: 'raw source is trace-only' }); continue; }
     const priority = node.priority === 'critical' ? 940 : node.priority === 'high' ? 900 : selection.depth === 0 ? 880 : 680 - selection.depth * 40;
-    if (node.content) add(priority, `${node.title} (${node.type})`, node.content, node, 'content', selection.reason, id === entry && node.type !== 'code_module');
-    if (node.type === 'code_module') {
+    if (node.content && node.type !== 'functional') add(priority, `${node.title} (${node.type})`, node.content, node, 'content', selection.reason, id === entry && node.type !== 'code_module');
+    if (node.type === 'functional') {
+      const detail = [node.description || node.content, node.provides?.length ? `Provides: ${node.provides.join(', ')}` : '', node.consumes?.length ? `Consumes: ${node.consumes.join(', ')}` : '', node.inputs?.length ? `Input: ${node.inputs.join(', ')}` : '', node.outputs?.length ? `Output: ${node.outputs.join(', ')}` : ''].filter(Boolean).join('\n');
+      if (detail) add(priority, `${node.title} (functional)`, detail, node, 'content', selection.reason, id === entry);
+    }
+    if (node.type === 'code_module' || node.type?.startsWith('implementation_')) {
       const scopes = selection.scope.length ? selection.scope : id === entry ? ['code', 'context', 'interface', 'state', 'decisions'] : ['interface', 'contract'];
       for (const scope of scopes) {
         if (scope === 'content' || scope === 'contract') continue;

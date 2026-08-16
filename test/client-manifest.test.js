@@ -37,6 +37,10 @@ test('client adds a conversation view tab and sends through scoped conversation'
   assert.match(source, /DOUBLE_PRESS_MS/);
   assert.match(source, /const NODE_TYPES/);
   assert.match(source, /Context Preview/);
+  assert.match(source, /viewMode.*semantic/);
+  assert.match(source, /functionalProposal/);
+  assert.match(source, /functional-infer/);
+  assert.match(source, /查看实现/);
   assert.match(source, /className: 'cg-search'/);
   assert.doesNotMatch(source, /\/context-graph\/index\.html/);
 });

@@ -1,5 +1,7 @@
 import { realpath } from 'node:fs/promises';
 import { analyzeProject, compileContext, ensureMemory, gitSummary, loadGraph, reconcileGraphs, saveGraph } from './core.js';
+import { analyzeDependencies } from './dependency-skill.js';
+import { applyFunctionalInference, inferFunctionalModules } from './semantic-functional.js';
 
 const PREFIX = '/context-graph';
 const BODY_CAP = 2 * 1024 * 1024;
@@ -37,6 +39,11 @@ async function api(ctx, config, req, res, url) {
     await ensureMemory(projectPath, result.graph);
     await saveGraph(projectPath, result.graph);
     return json(res, 200, result);
+  }
+  if (url.pathname === `${PREFIX}/api/functional-infer`) {
+    const graph = await loadGraph(projectPath); const facts = await analyzeDependencies(projectPath); const implementationGraph = reconcileGraphs({ modules: facts.modules.map(module => ({ ...module, imports: [] })) }, graph).graph; const proposal = inferFunctionalModules(implementationGraph, facts);
+    if (input.apply === true) return json(res, 200, { applied: true, proposal, graph: await saveGraph(projectPath, applyFunctionalInference(implementationGraph, proposal)) });
+    return json(res, 200, { applied: false, proposal });
   }
   if (url.pathname === `${PREFIX}/api/graph`) {
     const graph = await saveGraph(projectPath, input.graph);

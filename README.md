@@ -9,7 +9,7 @@ DSH user message
       ↓
 agent/pre-step
       ↓
-Code Graph + Context Graph + manual overrides
+Semantic Functional Graph + Implementation Graph + manual overrides
       ↓
 Context Compiler
       ↓
@@ -62,6 +62,9 @@ pnpm dsh web
 - `context_select`：为当前 DSH Session 指定目标模块以及强制加入/排除项。
 - `context_compile`：预览 token 预算下最终会注入的上下文。
 - `context_git_summary`：读取当前 workspace 的相关 Git 状态和历史。
+- `functional_infer`：从已分析的实现模块生成待确认的功能节点、功能关系和多对多实现映射；仅在 `apply=true` 时保存。
+- `functional_map_implementation`：手动保存功能节点到实现节点的映射，不修改源码。
+- `functional_merge` / `functional_split`：调整功能节点粒度，不修改源码或文件路径。
 - `dependency_discover_modules`：只读发现 Python 模块、符号和可选变更文件的增量事实。
 - `dependency_analyze_module` / `dependency_analyze_dependencies`：读取模块关系、接口与证据。
 - `dependency_find_callers` / `dependency_find_callees` / `dependency_find_related_modules`：查询调用与直接模块关系。
@@ -89,6 +92,14 @@ pnpm dsh web
 
 随插件发布的 Skill 按职责拆分为 `module-discovery`、`dependency-analysis`、`interface-contract`、`context-extraction`、`context-routing`、`context-maintenance` 和 `context-compiler`，共享同一 Graph 与工具接口。
 
+## Semantic Functional Graph
+
+默认图谱是语义功能图：它回答工程“做什么”，显示功能节点（例如 `ASR`、`Video Recording`）、结构化上下文和 `provides`、`depends_on`、`affects` 等语义关系。文件、类、函数、import 与 call 属于实现图，默认不会污染该视图。
+
+功能节点可包含描述、输入输出、提供和消费的能力，并通过 `mappings` 与一个或多个实现节点建立多对多映射。用户在功能节点检查器中点击“查看实现”后，才会展开该功能对应的源码实现。重命名、合并或拆分功能节点只改图谱元数据，绝不会重命名或改写代码文件。
+
+Context Compiler 从任务或功能节点开始，先遍历需求、约束、决策、接口和功能关系，再按任务词匹配功能映射中的少量实现文件。它不会从功能节点递归展开 import 或 call，因此无关模块不会因底层依赖而进入上下文。
+
 ## Dependency & Interface Skill
 
 `skills/dependency-interface/SKILL.md` 随插件发布。它将 Python AST 分析作为独立的工程依赖事实发现层：输出模块、符号级关系、接口 Contract、代码证据及置信度；不保存 Context Graph、不修改业务代码，也不决定模型最终上下文。Context Graph 的更新仍必须经 `context_graph_save` 显式确认，`FORCE_INCLUDE` 和 `FORCE_EXCLUDE` 永远优先于自动分析。
@@ -105,6 +116,8 @@ pnpm dsh web
 - 从节点右端口拖到另一节点左端口，手动创建连接。
 - 编辑关系类型、scope 和 `AUTO / MANUAL / FORCE_INCLUDE / FORCE_EXCLUDE`。
 - 从当前选择的任意 Context Entry 打开 Context Preview。
+- 语义、实现、当前上下文三种视图；语义视图默认隐藏实现细节。
+- 扫描实现后使用“推断功能模块”预览功能归并，再确认加入图谱。
 - `Ctrl/⌘ + S` 保存、`Delete` 删除、`F` 适合画布、`A` 自动排布、`Esc` 取消。
 对话输入区的“上下文”命令可把任务类型、内容和当前目标添加到 DSH 原生输入框。Host 端仅挂载同源 `/context-graph/api/*` 数据接口，并校验请求路径必须属于 `ctx.workspaceRegistry` 中已注册的 workspace。
 
