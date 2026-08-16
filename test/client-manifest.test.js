@@ -30,6 +30,8 @@ test('client adds a conversation view tab and sends through scoped conversation'
   assert.match(source, /id: 'context-graph'/);
   assert.match(source, /name: 'conversation\.input\.left'/);
   assert.match(source, /function ContextCommand/);
+  assert.match(source, /document\.addEventListener\('pointerdown', dismiss, true\)/);
+  assert.match(source, /event\.key === 'Escape'/);
   assert.match(source, /function Inspector[\s\S]*window\.addEventListener\('pointermove'/);
   assert.match(source, /sessions\.scope\(sessionId\)/);
   assert.match(source, /conversation\.send\(text\)/);

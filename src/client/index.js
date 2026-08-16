@@ -88,11 +88,19 @@ function Checks({ value = [], onChange }) {
 }
 
 function ContextCommand({ sessionId, inputActions, targetStore }) {
-  const [open, setOpen] = useState(false); const [taskType, setTaskType] = useState('develop'); const [task, setTask] = useState(''); const [target, setTarget] = useState(() => targetStore.get(sessionId)); const buttonRef = useRef(null);
+  const [open, setOpen] = useState(false); const [taskType, setTaskType] = useState('develop'); const [task, setTask] = useState(''); const [target, setTarget] = useState(() => targetStore.get(sessionId)); const anchorRef = useRef(null); const buttonRef = useRef(null);
   useEffect(() => targetStore.subscribe(sessionId, setTarget), [sessionId, targetStore]);
+  useEffect(() => {
+    if (!open) return undefined;
+    const dismiss = event => { if (!anchorRef.current?.contains(event.target)) setOpen(false); };
+    const keydown = event => { if (event.key === 'Escape') setOpen(false); };
+    document.addEventListener('pointerdown', dismiss, true);
+    window.addEventListener('keydown', keydown);
+    return () => { document.removeEventListener('pointerdown', dismiss, true); window.removeEventListener('keydown', keydown); };
+  }, [open]);
   const addToDraft = () => { const label = TASKS.find(([key]) => key === taskType)?.[1] || taskType; inputActions.setDraft(`任务类型：${label}${target ? `\n目标模块：${target}` : ''}\n\n${task}`.trim()); setOpen(false); };
   const rect = open ? buttonRef.current?.getBoundingClientRect() : null;
-  return h('span', { className: 'cg-context-anchor' }, h('button', { ref: buttonRef, type: 'button', className: 'cg-context-button', title: '上下文任务', 'aria-expanded': open, onClick: () => setOpen(value => !value) }, '上下文'), open && rect ? h('div', { className: 'cg-context-menu', role: 'dialog', 'aria-label': '上下文任务', style: { left: Math.max(12, Math.min(rect.left, window.innerWidth - 336)), bottom: window.innerHeight - rect.top + 8 } }, h('label', null, '任务类型'), h('select', { value: taskType, onChange: event => setTaskType(event.target.value) }, TASKS.map(([key, label]) => h('option', { key, value: key }, label))), h('div', { className: 'cg-context-target', title: target || '自动识别目标模块' }, target ? `目标模块：${target}` : '目标模块：自动识别'), h('label', null, '任务内容'), h('textarea', { value: task, placeholder: '描述需要完成的工作', onChange: event => setTask(event.target.value) }), h('button', { type: 'button', onClick: addToDraft }, '添加到输入框')) : null);
+  return h('span', { ref: anchorRef, className: 'cg-context-anchor' }, h('button', { ref: buttonRef, type: 'button', className: 'cg-context-button', title: '上下文任务', 'aria-expanded': open, onClick: () => setOpen(value => !value) }, '上下文'), open && rect ? h('div', { className: 'cg-context-menu', role: 'dialog', 'aria-label': '上下文任务', style: { left: Math.max(12, Math.min(rect.left, window.innerWidth - 336)), bottom: window.innerHeight - rect.top + 8 } }, h('label', null, '任务类型'), h('select', { value: taskType, onChange: event => setTaskType(event.target.value) }, TASKS.map(([key, label]) => h('option', { key, value: key }, label))), h('div', { className: 'cg-context-target', title: target || '自动识别目标模块' }, target ? `目标模块：${target}` : '目标模块：自动识别'), h('label', null, '任务内容'), h('textarea', { value: task, placeholder: '描述需要完成的工作', onChange: event => setTask(event.target.value) }), h('button', { type: 'button', onClick: addToDraft }, '添加到输入框')) : null);
 }
 
 function Inspector({ graph, selected, updateNode, updateEdge, remove, showImplementation }) {
