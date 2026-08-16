@@ -1,0 +1,18 @@
+{
+  "name": "context-graph-deepseek-harness",
+  "version": "0.1.0",
+  "description": "Visual context graph and budget-aware context compiler for AI coding agents",
+  "type": "module",
+  "bin": {
+    "context-graph": "./bin/context-graph.js"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test",
+    "check": "node --check src/core.js && node --check src/server.js && node --check src/mcp.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}

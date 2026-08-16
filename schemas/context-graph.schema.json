@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Mshir0/context-graph-deepseek-harness/schemas/context-graph.schema.json",
+  "title": "Context Graph",
+  "type": "object",
+  "required": ["version", "projectPath", "nodes", "edges", "overrides"],
+  "properties": {
+    "version": { "const": 1 },
+    "projectPath": { "type": "string" },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "mode"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "label": { "type": "string" },
+          "path": { "type": "string" },
+          "mode": { "enum": ["AUTO", "FORCE_INCLUDE", "FORCE_EXCLUDE"] },
+          "scope": { "$ref": "#/$defs/scope" },
+          "x": { "type": "number" },
+          "y": { "type": "number" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["source", "target", "type", "scope"],
+        "properties": {
+          "source": { "type": "string" },
+          "target": { "type": "string" },
+          "type": { "enum": ["dependency", "reference", "interface", "data", "optional", "force_include", "force_exclude"] },
+          "mode": { "enum": ["AUTO", "FORCE_INCLUDE", "FORCE_EXCLUDE"] },
+          "scope": { "$ref": "#/$defs/scope" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "overrides": {
+      "type": "object",
+      "required": ["include", "exclude"],
+      "properties": {
+        "include": { "type": "array", "items": { "type": "string" } },
+        "exclude": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  },
+  "$defs": {
+    "scope": { "type": "array", "uniqueItems": true, "items": { "enum": ["code", "context", "interface", "state", "decisions", "history"] } }
+  }
+}

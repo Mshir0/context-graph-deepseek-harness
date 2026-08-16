@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Context Graph</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark">CG</span><span>Context Graph</span></div>
+    <label class="project-field"><span>Project</span><input id="project" spellcheck="false"></label>
+    <button id="scan" title="Analyze Python dependencies">Scan code</button>
+    <button id="layout" class="secondary" title="Arrange nodes">Auto layout</button>
+    <button id="save" class="secondary" title="Save graph">Save</button>
+    <span id="status" aria-live="polite"></span>
+  </header>
+  <main>
+    <section class="workspace">
+      <div class="canvas-tools">
+        <button id="add-node" class="icon" title="Create module">+</button>
+        <button id="zoom-in" class="icon" title="Zoom in">+</button>
+        <button id="zoom-out" class="icon" title="Zoom out">−</button>
+        <button id="fit" class="icon" title="Fit graph">⌂</button>
+      </div>
+      <svg id="canvas" tabindex="0" aria-label="Context graph editor">
+        <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"/></marker></defs>
+        <g id="viewport"><g id="edges"></g><g id="nodes"></g></g>
+      </svg>
+      <div class="legend"><span><i class="dot interface"></i>Interface</span><span><i class="dot dependency"></i>Dependency</span><span><i class="dot data"></i>Data</span><span><i class="dot optional"></i>Optional</span></div>
+    </section>
+    <aside>
+      <div class="tabs"><button class="tab active" data-tab="inspector">Inspector</button><button class="tab" data-tab="preview">Preview</button><button class="tab" data-tab="changes">Changes</button></div>
+      <section id="inspector" class="panel active">
+        <div id="empty-selection" class="empty"><strong>Select a module or edge</strong><span>Edit its context policy here.</span></div>
+        <form id="node-form" hidden>
+          <div class="eyebrow">Module</div><h2 id="node-title"></h2>
+          <label>ID<input id="node-id" disabled></label><label>Source path<input id="node-path"></label>
+          <label>Mode<select id="node-mode"><option>AUTO</option><option>FORCE_INCLUDE</option><option>FORCE_EXCLUDE</option></select></label>
+          <fieldset><legend>Default context scope</legend><div id="node-scopes" class="checks"></div></fieldset>
+          <button type="button" id="connect">Connect module</button><button type="button" id="delete-node" class="danger">Delete</button>
+        </form>
+        <form id="edge-form" hidden>
+          <div class="eyebrow">Relationship</div><h2 id="edge-title"></h2>
+          <label>Type<select id="edge-type"></select></label><label>Mode<select id="edge-mode"><option>AUTO</option><option>FORCE_INCLUDE</option><option>FORCE_EXCLUDE</option></select></label>
+          <fieldset><legend>Context scope</legend><div id="edge-scopes" class="checks"></div></fieldset>
+          <button type="button" id="delete-edge" class="danger">Delete edge</button>
+        </form>
+      </section>
+      <section id="preview" class="panel">
+        <label>Target module<select id="target"></select></label><label>Task<textarea id="task" rows="3" placeholder="Describe the change..."></textarea></label>
+        <label>Token budget<input id="budget" type="number" min="1000" step="1000" value="16000"></label><button id="compile">Compile context</button>
+        <div id="preview-result" class="preview-result"></div>
+      </section>
+      <section id="changes" class="panel"><div id="suggestions"></div></section>
+    </aside>
+  </main>
+  <dialog id="connect-dialog"><form method="dialog"><h2>Create relationship</h2><label>Target<select id="connect-target"></select></label><label>Type<select id="connect-type"></select></label><menu><button value="cancel" class="secondary">Cancel</button><button id="confirm-connect" value="default">Create</button></menu></form></dialog>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

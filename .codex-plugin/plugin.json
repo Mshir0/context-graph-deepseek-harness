@@ -1,0 +1,29 @@
+{
+  "name": "context-graph-deepseek-harness",
+  "version": "0.1.0",
+  "description": "Visual, budget-aware engineering context management for AI coding agents",
+  "author": {
+    "name": "Mshir0",
+    "url": "https://github.com/Mshir0"
+  },
+  "homepage": "https://github.com/Mshir0/context-graph-deepseek-harness",
+  "repository": "https://github.com/Mshir0/context-graph-deepseek-harness",
+  "license": "MIT",
+  "keywords": ["context-graph", "deepseek", "coding-agent", "mcp"],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Context Graph",
+    "shortDescription": "Compile focused engineering context with a visual graph",
+    "longDescription": "Build separate code and context graphs, preserve module memory, and compile token-budgeted context for coding agents and DeepSeek.",
+    "developerName": "Mshir0",
+    "category": "Developer Tools",
+    "capabilities": ["Interactive", "Write"],
+    "defaultPrompt": [
+      "Scan this project and initialize its Context Graph.",
+      "Compile context for the module I am changing.",
+      "Review Context Graph drift and propose updates."
+    ],
+    "brandColor": "#38C894"
+  }
+}
