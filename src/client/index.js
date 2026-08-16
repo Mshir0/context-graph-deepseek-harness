@@ -11,7 +11,8 @@ body[data-ds-dark-theme] .cg-root{--cg-line:#34343a;--cg-muted:#a1a1aa;--cg-text
 `;
 
 const TASK_WORKFLOW_STYLES = String.raw`
-.cg-header{position:relative;z-index:5}.cg-node-menu-anchor{position:relative;display:inline-flex}.cg-node-menu{position:absolute;right:0;top:34px;z-index:10;display:grid;min-width:132px;padding:4px;background:#fff;border:1px solid var(--cg-line);border-radius:6px;box-shadow:0 10px 24px #00000018}.cg-node-menu-item{border:0;border-radius:4px;background:transparent;color:#27272a;padding:6px 8px;text-align:left;font:inherit;cursor:pointer}.cg-node-menu-item:hover{background:#f4f4f5;color:#111827}.cg-context-menu button:disabled{opacity:.55!important;cursor:default!important}.cg-context-actions{display:flex!important;gap:7px!important;margin-top:10px!important}.cg-context-menu .cg-context-actions button{flex:1!important;margin:0!important}.cg-context-menu button.cg-context-secondary{background:#f3f4f6!important;color:#374151!important}.cg-context-menu button.cg-context-secondary:hover{background:#e5e7eb!important}.cg-context-message{margin:8px 0 0!important;color:#64748b!important;font-size:12px!important;line-height:17px!important}.cg-context-message[data-error=true]{color:#b91c1c!important}.cg-context-divider{height:1px!important;margin:14px 0!important;background:#e5e7eb!important}body[data-ds-dark-theme] .cg-node-menu{background:#202023;border-color:#3f3f46;box-shadow:0 10px 24px #0008}body[data-ds-dark-theme] .cg-node-menu-item{color:#e4e4e7}body[data-ds-dark-theme] .cg-node-menu-item:hover{background:#2b2b30;color:#fff}body[data-ds-dark-theme] .cg-context-menu button.cg-context-secondary{background:#303036!important;color:#e4e4e7!important}body[data-ds-dark-theme] .cg-context-menu button.cg-context-secondary:hover{background:#3b3b42!important}body[data-ds-dark-theme] .cg-context-divider{background:#3f3f46!important}
+.cg-header{position:relative;z-index:5}.cg-node-menu-anchor{position:relative;display:inline-flex}.cg-node-menu{position:absolute;right:0;top:34px;z-index:10;display:grid;min-width:132px;padding:4px;background:#fff;border:1px solid var(--cg-line);border-radius:6px;box-shadow:0 10px 24px #00000018}.cg-node-menu-item{border:0;border-radius:4px;background:transparent;color:#27272a;padding:6px 8px;text-align:left;font:inherit;cursor:pointer}.cg-node-menu-item:hover{background:#f4f4f5;color:#111827}.cg-context-menu button:disabled{opacity:.55!important;cursor:default!important}.cg-context-actions{display:flex!important;gap:7px!important;margin-top:10px!important}.cg-context-menu .cg-context-actions button{flex:1!important;margin:0!important}.cg-context-menu button.cg-context-secondary{background:#f3f4f6!important;color:#374151!important}.cg-context-menu button.cg-context-secondary:hover{background:#e5e7eb!important}.cg-context-message{margin:8px 0 0!important;color:#64748b!important;font-size:12px!important;line-height:17px!important}.cg-context-message[data-error=true]{color:#b91c1c!important}.cg-context-divider{height:1px!important;margin:14px 0!important;background:#e5e7eb!important}.cg-canvas,.cg-canvas *{user-select:none;-webkit-user-select:none}
+body[data-ds-dark-theme] .cg-node-menu{background:#202023;border-color:#3f3f46;box-shadow:0 10px 24px #0008}body[data-ds-dark-theme] .cg-node-menu-item{color:#e4e4e7}body[data-ds-dark-theme] .cg-node-menu-item:hover{background:#2b2b30;color:#fff}body[data-ds-dark-theme] .cg-context-menu button.cg-context-secondary{background:#303036!important;color:#e4e4e7!important}body[data-ds-dark-theme] .cg-context-menu button.cg-context-secondary:hover{background:#3b3b42!important}body[data-ds-dark-theme] .cg-context-divider{background:#3f3f46!important}
 `;
 
 const API = '/context-graph/api';
@@ -53,25 +54,64 @@ function graphPoint(svg, view, clientX, clientY) {
   return { x: (clientX - rect.left - view.x) / view.zoom, y: (clientY - rect.top - view.y) / view.zoom };
 }
 
-function autoLayout(graph) {
-  const incoming = new Map(graph.nodes.map(node => [node.id, 0]));
-  for (const edge of graph.edges) incoming.set(edge.target, (incoming.get(edge.target) || 0) + 1);
-  const queue = graph.nodes.filter(node => !incoming.get(node.id)).map(node => node.id);
-  const levels = new Map(queue.map(id => [id, 0]));
-  while (queue.length) {
-    const id = queue.shift();
-    for (const edge of graph.edges.filter(item => item.source === id)) {
-      if (levels.has(edge.target)) continue;
-      levels.set(edge.target, (levels.get(id) || 0) + 1);
-      queue.push(edge.target);
-    }
+function truncateNodeText(value, maxWidth, fontSize) {
+  const text = String(value || '');
+  let width = 0;
+  let output = '';
+  for (const character of [...text]) {
+    const characterWidth = character.codePointAt(0) > 255 ? fontSize : fontSize * 0.56;
+    if (width + characterWidth + fontSize > maxWidth) return `${output}…`;
+    output += character;
+    width += characterWidth;
   }
-  const rows = new Map();
+  return output;
+}
+
+function autoLayout(graph) {
+  const nodeIds = new Set(graph.nodes.map(node => node.id));
+  const incoming = new Map(graph.nodes.map(node => [node.id, 0]));
+  const outgoing = new Map(graph.nodes.map(node => [node.id, []]));
+  for (const edge of graph.edges) {
+    if (!nodeIds.has(edge.source) || !nodeIds.has(edge.target)) continue;
+    outgoing.get(edge.source).push(edge.target);
+    incoming.set(edge.target, incoming.get(edge.target) + 1);
+  }
+  const levels = new Map();
+  const queue = [];
+  const seed = id => {
+    if (levels.has(id)) return;
+    levels.set(id, 0);
+    queue.push(id);
+  };
+  for (const node of graph.nodes) if (incoming.get(node.id) === 0) seed(node.id);
+  while (levels.size < graph.nodes.length) {
+    while (queue.length) {
+      const id = queue.shift();
+      for (const target of outgoing.get(id)) {
+        if (levels.has(target)) continue;
+        levels.set(target, (levels.get(id) || 0) + 1);
+        queue.push(target);
+      }
+    }
+    const next = graph.nodes.find(node => !levels.has(node.id));
+    if (!next) break;
+    seed(next.id);
+  }
+  const buckets = new Map();
+  for (const node of graph.nodes) {
+    const level = levels.get(node.id) || 0;
+    const bucket = buckets.get(level) || [];
+    bucket.push(node.id);
+    buckets.set(level, bucket);
+  }
   return { ...graph, nodes: graph.nodes.map(node => {
     const level = levels.get(node.id) || 0;
-    const row = rows.get(level) || 0;
-    rows.set(level, row + 1);
-    return { ...node, x: 36 + level * 245, y: 52 + row * 126 };
+    const bucket = buckets.get(level);
+    const index = bucket.indexOf(node.id);
+    const rowsPerColumn = Math.max(1, Math.floor(Math.sqrt(bucket.length)));
+    const column = Math.floor(index / rowsPerColumn);
+    const row = index % rowsPerColumn;
+    return { ...node, x: 36 + (level + column) * 245, y: 52 + row * 126 };
   }) };
 }
 
@@ -313,7 +353,13 @@ function GraphPanel({ sessionId, projectPath, sendPrompt, setTarget }) {
     catch (cause) { announce(cause.message, true); }
   }, [announce, projectPath]);
   const fit = useCallback(() => { const svg = svgRef.current; if (svg && graphRef.current) setView(fitView(graphRef.current, svg.clientWidth, svg.clientHeight)); }, []);
-  const layout = useCallback(() => { if (graphRef.current) { const next = autoLayout(graphRef.current); setGraph(next); requestAnimationFrame(fit); announce('已自动排布，保存后生效'); } }, [announce, fit]);
+  const layout = useCallback(() => {
+    if (!graphRef.current) return;
+    const next = autoLayout(graphRef.current);
+    setGraph(next);
+    requestAnimationFrame(() => { const svg = svgRef.current; if (svg) setView(fitView(next, svg.clientWidth, svg.clientHeight)); });
+    announce('已自动排布，保存后生效');
+  }, [announce]);
   const remove = useCallback(() => {
     const current = selectedRef.current; if (!current) return;
     setGraph(previous => current.kind === 'node'
@@ -417,7 +463,7 @@ function GraphPanel({ sessionId, projectPath, sendPrompt, setTarget }) {
     setInspected(doublePressed ? item : null);
   };
   const point = event => graphPoint(svgRef.current, view, event.clientX, event.clientY);
-  const startPan = event => { if (event.button !== 0) return; pressRef.current = { key: '', time: 0 }; event.currentTarget.setPointerCapture(event.pointerId); setSelected(null); setInspected(null); setGesture({ kind: 'pan', startX: event.clientX, startY: event.clientY, x: view.x, y: view.y }); };
+  const startPan = event => { if (event.button !== 0) return; event.preventDefault(); pressRef.current = { key: '', time: 0 }; event.currentTarget.setPointerCapture(event.pointerId); setSelected(null); setInspected(null); setGesture({ kind: 'pan', startX: event.clientX, startY: event.clientY, x: view.x, y: view.y }); };
   const move = event => {
     if (!gesture) return;
     if (gesture.kind === 'pan') setView(current => ({ ...current, x: gesture.x + event.clientX - gesture.startX, y: gesture.y + event.clientY - gesture.startY }));
@@ -450,17 +496,17 @@ function GraphPanel({ sessionId, projectPath, sendPrompt, setTarget }) {
         onWheel: event => { event.preventDefault(); const before = point(event); const zoom = Math.min(2, Math.max(.25, view.zoom * (event.deltaY > 0 ? .9 : 1.1))); const rect = svgRef.current.getBoundingClientRect(); setView({ zoom, x: event.clientX - rect.left - before.x * zoom, y: event.clientY - rect.top - before.y * zoom }); } },
         h('defs', null, h('marker', { id: 'cg-arrow', markerWidth: 8, markerHeight: 8, refX: 7, refY: 4, orient: 'auto' }, h('path', { d: 'M0,0 L8,4 L0,8 Z', fill: 'context-stroke' }))),
         h('g', { transform: `translate(${view.x} ${view.y}) scale(${view.zoom})` },
-          displayEdges.map((edge, index) => { const source = nodes.get(edge.source); const target = nodes.get(edge.target); if (!source || !target) return null; const d = edgePath(source, target); return h('g', { key: `${edge.source}-${edge.target}-${edge.type}-${index}`, onPointerDown: event => { event.stopPropagation(); if (edge._index !== undefined) selectItem({ kind: 'edge', index: edge._index }); } }, h('path', { d, className: 'cg-edge-hit' }), h('path', { d, className: 'cg-edge', 'data-type': edge.type, 'data-selected': selected?.kind === 'edge' && selected.index === edge._index, markerEnd: 'url(#cg-arrow)' })); }),
+          displayEdges.map((edge, index) => { const source = nodes.get(edge.source); const target = nodes.get(edge.target); if (!source || !target) return null; const d = edgePath(source, target); return h('g', { key: `${edge.source}-${edge.target}-${edge.type}-${index}`, onPointerDown: event => { event.preventDefault(); event.stopPropagation(); if (edge._index !== undefined) selectItem({ kind: 'edge', index: edge._index }); } }, h('path', { d, className: 'cg-edge-hit' }), h('path', { d, className: 'cg-edge', 'data-type': edge.type, 'data-selected': selected?.kind === 'edge' && selected.index === edge._index, markerEnd: 'url(#cg-arrow)' })); }),
           gesture?.kind === 'connect' && nodes.get(gesture.source) ? h('path', { className: 'cg-temp', d: edgePath(nodes.get(gesture.source), { x: gesture.point.x, y: gesture.point.y - NODE_H / 2 }) }) : null,
           visibleNodes.map(node => h('g', { key: node.id, className: 'cg-node', transform: `translate(${node.x || 0} ${node.y || 0})`, 'data-selected': selected?.kind === 'node' && selected.id === node.id, 'data-mode': node.mode || 'AUTO', 'data-node-type': node.type || 'code_module',
-            onPointerDown: event => { event.stopPropagation(); const p = point(event); svgRef.current.setPointerCapture(event.pointerId); selectItem({ kind: 'node', id: node.id }); setGesture({ kind: 'node', id: node.id, dx: p.x - (node.x || 0), dy: p.y - (node.y || 0) }); } },
+            onPointerDown: event => { event.preventDefault(); event.stopPropagation(); const p = point(event); svgRef.current.setPointerCapture(event.pointerId); selectItem({ kind: 'node', id: node.id }); setGesture({ kind: 'node', id: node.id, dx: p.x - (node.x || 0), dy: p.y - (node.y || 0) }); } },
             h('rect', { className: 'cg-node-box', width: NODE_W, height: NODE_H, rx: 5 }),
             h('path', { className: 'cg-node-head', d: `M5 0 H${NODE_W - 5} Q${NODE_W} 0 ${NODE_W} 5 V28 H0 V5 Q0 0 5 0` }),
-            h('text', { className: 'cg-node-title', x: 11, y: 19 }, (node.label || node.id).slice(0, 25)),
-            h('text', { className: 'cg-node-meta', x: 11, y: 48 }, (node.type === 'code_module' || !node.type ? node.path || '未设置路径' : node.type).slice(0, 29)),
-            h('text', { className: 'cg-node-meta', x: 11, y: 69 }, node.type === 'code_module' || !node.type ? node.mode || 'AUTO' : `${node.priority || 'normal'} · ${node.status || 'active'}`),
-            h('circle', { className: 'cg-port', cx: 0, cy: NODE_H / 2, r: 6, onPointerDown: event => event.stopPropagation(), onPointerUp: event => { event.stopPropagation(); connect(node.id); } }),
-            h('circle', { className: 'cg-port', cx: NODE_W, cy: NODE_H / 2, r: 6, onPointerDown: event => { event.stopPropagation(); setSelected({ kind: 'node', id: node.id }); setInspected(null); setGesture({ kind: 'connect', source: node.id, point: point(event) }); } }))),
+            h('text', { className: 'cg-node-title', x: 11, y: 19 }, truncateNodeText(node.label || node.id, NODE_W - 22, 12)),
+            h('text', { className: 'cg-node-meta', x: 11, y: 48 }, truncateNodeText(node.type === 'code_module' || !node.type ? node.path || '未设置路径' : node.type, NODE_W - 22, 10)),
+            h('text', { className: 'cg-node-meta', x: 11, y: 69 }, truncateNodeText(node.type === 'code_module' || !node.type ? node.mode || 'AUTO' : `${node.priority || 'normal'} · ${node.status || 'active'}`, NODE_W - 22, 10)),
+            h('circle', { className: 'cg-port', cx: 0, cy: NODE_H / 2, r: 6, onPointerDown: event => { event.preventDefault(); event.stopPropagation(); }, onPointerUp: event => { event.preventDefault(); event.stopPropagation(); connect(node.id); } }),
+            h('circle', { className: 'cg-port', cx: NODE_W, cy: NODE_H / 2, r: 6, onPointerDown: event => { event.preventDefault(); event.stopPropagation(); setSelected({ kind: 'node', id: node.id }); setInspected(null); setGesture({ kind: 'connect', source: node.id, point: point(event) }); } }))),
         )),
       h('div', { className: 'cg-tools' }, h(IconButton, { label: '放大', onClick: () => setView(current => ({ ...current, zoom: Math.min(2, current.zoom * 1.15) })) }, '+'), h(IconButton, { label: '缩小', onClick: () => setView(current => ({ ...current, zoom: Math.max(.25, current.zoom / 1.15) })) }, '−'), h(IconButton, { label: '适合画布 (F)', onClick: fit }, '□'), h(IconButton, { label: '自动排布 (A)', onClick: layout }, '≡')),
       !visibleNodes.length ? h('div', { className: 'cg-empty' }, h('strong', null, graph?.nodes.length ? '没有匹配节点' : '暂无上下文节点'), h('span', null, graph?.nodes.length ? '调整搜索或类型筛选' : '扫描代码或新建上下文节点')) : null,

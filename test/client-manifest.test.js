@@ -47,6 +47,10 @@ test('client adds a conversation view tab and sends through scoped conversation'
   assert.match(source, /const NODE_TYPES/);
   assert.match(source, /const CREATE_NODE_TYPES/);
   assert.match(source, /新建节点类型/);
+  assert.match(source, /function truncateNodeText/);
+  assert.match(source, /user-select:none/);
+  assert.match(source, /rowsPerColumn/);
+  assert.match(source, /fitView\(next/);
   assert.match(source, /Context Preview/);
   assert.match(source, /本会话排除/);
   assert.match(source, /viewMode.*semantic/);
