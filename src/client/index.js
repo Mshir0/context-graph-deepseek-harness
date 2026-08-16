@@ -4,7 +4,7 @@
     factory: require => {
 const { createElement: h, useCallback, useEffect, useMemo, useRef, useState } = require('react');
 const styles = String.raw`
-.cg-root{--cg-line:#e5e7eb;--cg-muted:#6b7280;--cg-text:#171717;--cg-bg:#fff;--cg-soft:#f7f7f8;--cg-accent:#2563eb;display:grid;grid-template-rows:48px minmax(0,1fr) auto;height:100%;min-width:0;background:var(--cg-bg);color:var(--cg-text);font:13px/1.4 Inter,ui-sans-serif,system-ui,sans-serif;border-left:1px solid var(--cg-line)}
+.cg-root{--cg-line:#e5e7eb;--cg-muted:#6b7280;--cg-text:#171717;--cg-bg:#fff;--cg-soft:#f7f7f8;--cg-accent:#2563eb;display:grid;grid-template-rows:48px minmax(0,1fr) auto;height:100%;min-width:0;background:var(--cg-bg);color:var(--cg-text);font:13px/1.4 Inter,ui-sans-serif,system-ui,sans-serif}
 .cg-root *{box-sizing:border-box;letter-spacing:0}.cg-header{display:flex;align-items:center;gap:6px;padding:0 10px;border-bottom:1px solid var(--cg-line);min-width:0}.cg-title{font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-right:auto}.cg-icon{width:30px;height:30px;display:grid;place-items:center;border:0;border-radius:5px;background:transparent;color:#52525b;font-size:16px;cursor:pointer}.cg-icon:hover{background:#f1f1f2;color:#18181b}.cg-icon:disabled{opacity:.4;cursor:default}.cg-canvas-wrap{position:relative;min-height:0;overflow:hidden;background-color:#fafafa;background-image:radial-gradient(#d6d6d8 1px,transparent 1px);background-size:18px 18px}.cg-canvas{display:block;width:100%;height:100%;touch-action:none;cursor:grab}.cg-canvas[data-dragging=true]{cursor:grabbing}.cg-edge{fill:none;stroke:#a1a1aa;stroke-width:1.7}.cg-edge[data-type=interface]{stroke:#3b82f6}.cg-edge[data-type=dependency]{stroke:#d97706}.cg-edge[data-type=data]{stroke:#8b5cf6}.cg-edge[data-type=optional]{stroke-dasharray:6 5}.cg-edge[data-selected=true]{stroke:#111827;stroke-width:3}.cg-edge-hit{fill:none;stroke:transparent;stroke-width:13;cursor:pointer}.cg-temp{fill:none;stroke:#2563eb;stroke-width:2;stroke-dasharray:5 4}.cg-node{cursor:move}.cg-node-box{fill:white;stroke:#d4d4d8;stroke-width:1}.cg-node[data-selected=true] .cg-node-box{stroke:#2563eb;stroke-width:2}.cg-node[data-mode=FORCE_INCLUDE] .cg-node-box{stroke:#16a34a}.cg-node[data-mode=FORCE_EXCLUDE] .cg-node-box{stroke:#dc2626}.cg-node-head{fill:#f4f4f5}.cg-node-title{font-size:12px;font-weight:650;fill:#18181b;pointer-events:none}.cg-node-meta{font-size:10px;fill:#71717a;pointer-events:none}.cg-port{fill:#fff;stroke:#71717a;stroke-width:2;cursor:crosshair}.cg-port:hover{fill:#2563eb;stroke:#2563eb}.cg-tools{position:absolute;left:8px;top:8px;display:flex;gap:3px;padding:3px;background:#ffffffeb;border:1px solid var(--cg-line);border-radius:6px;box-shadow:0 2px 8px #0000000d}.cg-status{position:absolute;left:9px;bottom:8px;max-width:calc(100% - 18px);padding:4px 7px;border:1px solid var(--cg-line);border-radius:4px;background:#ffffffeb;color:var(--cg-muted);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cg-status[data-error=true]{color:#b91c1c}.cg-empty{position:absolute;inset:0;display:grid;place-content:center;text-align:center;color:var(--cg-muted);pointer-events:none}.cg-empty strong{color:#3f3f46;margin-bottom:4px}.cg-inspector{position:absolute;left:8px;right:8px;bottom:35px;max-height:48%;overflow:auto;background:#fff;border:1px solid var(--cg-line);border-radius:6px;box-shadow:0 8px 24px #00000014}.cg-inspector-head{display:flex;align-items:center;padding:8px 10px;border-bottom:1px solid var(--cg-line);font-weight:650}.cg-inspector-head span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-right:auto}.cg-form{padding:8px 10px}.cg-form label{display:block;margin:7px 0 3px;color:var(--cg-muted);font-size:11px}.cg-form input,.cg-form select,.cg-compose textarea,.cg-compose select{width:100%;border:1px solid #d4d4d8;border-radius:5px;background:#fff;color:#18181b;font:inherit;padding:7px 8px;outline:none}.cg-form input:focus,.cg-form select:focus,.cg-compose textarea:focus,.cg-compose select:focus{border-color:#60a5fa;box-shadow:0 0 0 2px #dbeafe}.cg-checks{display:flex;flex-wrap:wrap;gap:5px 9px}.cg-checks label{display:flex;align-items:center;gap:4px;margin:3px 0;color:#3f3f46}.cg-checks input{width:auto;box-shadow:none}.cg-row{display:flex;gap:6px}.cg-row>*{min-width:0;flex:1}.cg-danger{margin-top:8px;border:0;background:transparent;color:#dc2626;padding:5px 0;cursor:pointer}.cg-compose{padding:9px 10px 10px;border-top:1px solid var(--cg-line);background:#fff}.cg-compose-top{display:flex;gap:6px;margin-bottom:6px}.cg-compose-top select{flex:1}.cg-target{flex:1;min-width:0;color:var(--cg-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;align-self:center;font-size:11px}.cg-compose textarea{display:block;min-height:62px;max-height:140px;resize:vertical;padding-right:38px}.cg-textarea-wrap{position:relative}.cg-send{position:absolute;right:6px;bottom:6px;width:28px;height:28px;border:0;border-radius:5px;background:#18181b;color:#fff;cursor:pointer}.cg-send:disabled{opacity:.35;cursor:default}.cg-help{position:absolute;inset:12px;z-index:4;background:#fff;border:1px solid var(--cg-line);border-radius:6px;box-shadow:0 12px 34px #0002;padding:13px;overflow:auto}.cg-help h3{font-size:14px;margin:0 0 10px}.cg-help dl{display:grid;grid-template-columns:auto 1fr;gap:7px 12px;margin:0}.cg-help dt{font-family:ui-monospace,monospace;color:#18181b}.cg-help dd{margin:0;color:var(--cg-muted)}.cg-launcher{width:28px;height:28px;display:grid;place-items:center;border:0;border-radius:5px;background:transparent;color:inherit;font-size:15px;cursor:pointer}.cg-launcher:hover{background:color-mix(in srgb,currentColor 9%,transparent)}
 body[data-ds-dark-theme] .cg-root{--cg-line:#34343a;--cg-muted:#a1a1aa;--cg-text:#f4f4f5;--cg-bg:#18181b;--cg-soft:#27272a}body[data-ds-dark-theme] .cg-canvas-wrap{background-color:#1c1c1f;background-image:radial-gradient(#3f3f46 1px,transparent 1px)}body[data-ds-dark-theme] .cg-node-box,body[data-ds-dark-theme] .cg-form input,body[data-ds-dark-theme] .cg-form select,body[data-ds-dark-theme] .cg-compose textarea,body[data-ds-dark-theme] .cg-compose select{fill:#202023;background:#202023;color:#f4f4f5;border-color:#3f3f46}body[data-ds-dark-theme] .cg-node-head{fill:#2b2b30}body[data-ds-dark-theme] .cg-node-title{fill:#f4f4f5}body[data-ds-dark-theme] .cg-node-meta{fill:#a1a1aa}body[data-ds-dark-theme] .cg-tools,body[data-ds-dark-theme] .cg-status,body[data-ds-dark-theme] .cg-inspector,body[data-ds-dark-theme] .cg-help{background:#202023eb;border-color:#3f3f46}body[data-ds-dark-theme] .cg-icon{color:#d4d4d8}body[data-ds-dark-theme] .cg-icon:hover{background:#303036;color:#fff}body[data-ds-dark-theme] .cg-compose{background:#18181b}body[data-ds-dark-theme] .cg-send{background:#f4f4f5;color:#18181b}body[data-ds-dark-theme] .cg-checks label{color:#d4d4d8}body[data-ds-dark-theme] .cg-help dt{color:#f4f4f5}
 `;
@@ -75,10 +75,6 @@ function fitView(graph, width, height) {
 
 function IconButton({ label, children, onClick, disabled }) {
   return h('button', { className: 'cg-icon', type: 'button', title: label, 'aria-label': label, onClick, disabled }, children);
-}
-
-function GraphLauncher({ open }) {
-  return h('button', { className: 'cg-launcher', type: 'button', title: '打开上下文图谱', 'aria-label': '打开上下文图谱', onClick: open }, '⌘');
 }
 
 function Checks({ value = [], onChange }) {
@@ -203,8 +199,7 @@ function GraphPanel({ sessionId, projectPath, sendPrompt }) {
       h('div', { className: 'cg-title' }, '上下文图谱'),
       h(IconButton, { label: '扫描代码', onClick: scan }, '↻'),
       h(IconButton, { label: '保存 (Ctrl+S)', onClick: save }, '⌑'),
-      h(IconButton, { label: '快捷键', onClick: () => setHelp(value => !value) }, '?'),
-      h(IconButton, { label: '关闭右栏', onClick: () => window.dispatchEvent(new CustomEvent('context-graph:close')) }, '×')),
+      h(IconButton, { label: '快捷键', onClick: () => setHelp(value => !value) }, '?')),
     h('div', { className: 'cg-canvas-wrap' },
       h('svg', { ref: svgRef, className: 'cg-canvas', 'data-dragging': Boolean(gesture), onPointerDown: startPan, onPointerMove: move, onPointerUp: stop, onPointerCancel: stop,
         onWheel: event => { event.preventDefault(); const before = point(event); const zoom = Math.min(2, Math.max(.25, view.zoom * (event.deltaY > 0 ? .9 : 1.1))); const rect = svgRef.current.getBoundingClientRect(); setView({ zoom, x: event.clientX - rect.left - before.x * zoom, y: event.clientY - rect.top - before.y * zoom }); } },
@@ -234,7 +229,7 @@ function GraphPanel({ sessionId, projectPath, sendPrompt }) {
       h('div', { className: 'cg-textarea-wrap' }, h('textarea', { value: task, placeholder: '输入任务提示词…', onChange: event => setTask(event.target.value), onKeyDown: event => { if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') { event.preventDefault(); void submit(); } } }), h('button', { className: 'cg-send', type: 'button', title: '发送到当前会话', 'aria-label': '发送到当前会话', disabled: !task.trim() || sending, onClick: () => void submit() }, '↑'))));
 }
 
-const inject = ['slots', 'layout', 'sessions'];
+const inject = ['slots', 'sessions'];
 
 function apply(ctx) {
   ctx.effect(() => {
@@ -245,12 +240,12 @@ function apply(ctx) {
     return () => style.remove();
   }, 'context-graph: styles');
 
-  ctx.inject(['slots', 'layout', 'sessions', 'conversation'], scope => {
-    const close = () => scope.layout.closeDetails();
-    window.addEventListener('context-graph:close', close);
-    const dispose = scope.slots.inject('details', () => scope.slots.register({
-      name: 'details',
-      priority: -100,
+  ctx.inject(['slots', 'sessions', 'conversation'], scope => {
+    return scope.slots.inject('conversation.view', () => scope.slots.register({
+      name: 'conversation.view',
+      id: 'context-graph',
+      order: 20,
+      label: () => '上下文图谱',
       registrant: 'dsh-context-graph',
       inject: sessionId => {
         const projectPath = scope.sessions.list.getSnapshot().byId[sessionId]?.cwd || '';
@@ -266,31 +261,7 @@ function apply(ctx) {
         };
       },
     }, GraphPanel));
-    const disposeLauncher = scope.slots.inject('conversation.session.header.utilities', () => scope.slots.register({
-      name: 'conversation.session.header.utilities',
-      id: 'context-graph',
-      order: 90,
-      registrant: 'dsh-context-graph',
-      inject: () => ({ open: () => scope.layout.openDetails() }),
-    }, GraphLauncher));
-    const openPanel = () => { try { scope.layout.openDetails(); } catch { /* The next retry runs after the frame mounts. */ } };
-    const firstOpen = setTimeout(openPanel, 0);
-    const retryOpen = setTimeout(openPanel, 250);
-    return () => {
-      clearTimeout(firstOpen); clearTimeout(retryOpen);
-      window.removeEventListener('context-graph:close', close);
-      disposeLauncher(); dispose();
-    };
   });
-
-  const shortcut = event => {
-    if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'g') {
-      event.preventDefault();
-      try { ctx.layout.openDetails(); } catch { /* The layout is not mounted yet. */ }
-    }
-  };
-  window.addEventListener('keydown', shortcut);
-  ctx.effect(() => () => window.removeEventListener('keydown', shortcut), 'context-graph: panel shortcut');
 }
 
 return { inject, apply };

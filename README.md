@@ -1,6 +1,6 @@
 # Context Graph for DeepSeek Harness
 
-这是一个由 **DeepSeek Harness (`dsh`) 直接加载的 Cordis Host + Client 插件**，不是独立软件，也不会启动额外网页、模型客户端或 Web 服务。图编辑器原生替换 Harness 的右侧详情栏。
+这是一个由 **DeepSeek Harness (`dsh`) 直接加载的 Cordis Host + Client 插件**，不是独立软件，也不会启动额外网页、模型客户端或 Web 服务。图编辑器作为 Harness 对话区域的原生视图标签。
 
 插件使用 DSH 的 Agent 生命周期、工具注册表、Session workspace 和共享 Web Server：
 
@@ -70,11 +70,11 @@ pnpm dsh web
 
 如果目标模块无法可靠推断，插件不会猜测或加载全工程；Agent 可调用 `context_select` 明确目标。
 
-## Harness 原生右栏
+## Harness 对话视图
 
-打开 `http://127.0.0.1:3080/` 后，Context Graph 作为 DSH client 插件注册到官方 `details` 槽，不存在 `/context-graph/` 独立页面。当前会话已有内容后，右栏会自动打开；关闭后可点击会话标题栏中的图谱按钮，或按 `Ctrl/⌘ + Shift + G` 重新打开。
+打开 `http://127.0.0.1:3080/` 后，Context Graph 作为 DSH client 插件注册到官方 `conversation.view` 槽，与“对话”和“轨迹”并列。不存在 `/context-graph/` 独立页面，也不占用右侧详情栏。
 
-右栏支持：
+图谱视图支持：
 
 - 中文界面以及跟随 DSH 的浅色/深色显示。
 - 节点拖动、画布平移、滚轮缩放、适合画布和自动排布。
@@ -83,7 +83,7 @@ pnpm dsh web
 - `Ctrl/⌘ + S` 保存、`Delete` 删除、`F` 适合画布、`A` 自动排布、`Esc` 取消。
 - 底部选择开发、调试、重构、测试、审查或文档任务，输入提示词后用 `Ctrl/⌘ + Enter` 发送到当前 DSH session。
 
-DSH 的官方布局在空白 session 中不挂载 `details` 槽，因此第一次新建空白会话时需先使用中央输入框发送一条消息。之后右栏输入会直接复用同一 session。Host 端仅挂载同源 `/context-graph/api/*` 数据接口，并校验请求路径必须属于 `ctx.workspaceRegistry` 中已注册的 workspace。
+底部输入会直接复用当前 DSH session。Host 端仅挂载同源 `/context-graph/api/*` 数据接口，并校验请求路径必须属于 `ctx.workspaceRegistry` 中已注册的 workspace。
 
 ## Bundle 配置
 
