@@ -13,6 +13,9 @@ body[data-ds-dark-theme] .cg-root{--cg-line:#34343a;--cg-muted:#a1a1aa;--cg-text
 const TASK_WORKFLOW_STYLES = String.raw`
 .cg-header{position:relative;z-index:5}.cg-node-menu-anchor{position:relative;display:inline-flex}.cg-node-menu{position:absolute;right:0;top:34px;z-index:10;display:grid;min-width:132px;padding:4px;background:#fff;border:1px solid var(--cg-line);border-radius:6px;box-shadow:0 10px 24px #00000018}.cg-node-menu-item{border:0;border-radius:4px;background:transparent;color:#27272a;padding:6px 8px;text-align:left;font:inherit;cursor:pointer}.cg-node-menu-item:hover{background:#f4f4f5;color:#111827}.cg-context-menu button:disabled{opacity:.55!important;cursor:default!important}.cg-context-actions{display:flex!important;gap:7px!important;margin-top:10px!important}.cg-context-menu .cg-context-actions button{flex:1!important;margin:0!important}.cg-context-menu button.cg-context-secondary{background:#f3f4f6!important;color:#374151!important}.cg-context-menu button.cg-context-secondary:hover{background:#e5e7eb!important}.cg-context-message{margin:8px 0 0!important;color:#64748b!important;font-size:12px!important;line-height:17px!important}.cg-context-message[data-error=true]{color:#b91c1c!important}.cg-context-divider{height:1px!important;margin:14px 0!important;background:#e5e7eb!important}.cg-canvas,.cg-canvas *{user-select:none;-webkit-user-select:none}
 body[data-ds-dark-theme] .cg-node-menu{background:#202023;border-color:#3f3f46;box-shadow:0 10px 24px #0008}body[data-ds-dark-theme] .cg-node-menu-item{color:#e4e4e7}body[data-ds-dark-theme] .cg-node-menu-item:hover{background:#2b2b30;color:#fff}body[data-ds-dark-theme] .cg-context-menu button.cg-context-secondary{background:#303036!important;color:#e4e4e7!important}body[data-ds-dark-theme] .cg-context-menu button.cg-context-secondary:hover{background:#3b3b42!important}body[data-ds-dark-theme] .cg-context-divider{background:#3f3f46!important}
+.cg-side-panel{position:absolute;z-index:6;top:12px;right:12px;bottom:12px;width:min(420px,calc(100% - 24px));display:flex;flex-direction:column;overflow:hidden;background:var(--cg-bg);color:var(--cg-text);border:1px solid var(--cg-line);border-radius:8px;box-shadow:0 12px 34px #0002}.cg-side-panel button:focus-visible{outline:2px solid #60a5fa;outline-offset:1px}.cg-panel-head{display:flex;align-items:center;gap:10px;min-height:58px;padding:9px 10px 9px 12px;border-bottom:1px solid var(--cg-line);background:var(--cg-bg);flex:0 0 auto}.cg-panel-heading{min-width:0;flex:1}.cg-panel-kicker{display:block;color:var(--cg-muted);font-size:10px;line-height:15px}.cg-panel-title{display:block;font-size:14px;font-weight:650;line-height:20px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cg-panel-subtitle{display:block;margin-top:1px;color:var(--cg-muted);font-size:11px;line-height:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cg-panel-head>.cg-icon{flex:0 0 auto}.cg-panel-body{flex:1;min-height:0;overflow:auto;padding:12px}.cg-panel-actions{display:flex;justify-content:flex-end;gap:8px;padding:10px 12px;border-top:1px solid var(--cg-line);background:var(--cg-bg);flex:0 0 auto}.cg-panel-button{min-width:76px;height:32px;border:1px solid transparent;border-radius:6px;padding:0 12px;font:500 13px/30px Inter,ui-sans-serif,system-ui,sans-serif;cursor:pointer}.cg-panel-button:disabled{opacity:.45;cursor:default}.cg-panel-primary{background:var(--cg-accent);color:#fff}.cg-panel-primary:hover:not(:disabled){background:#1d4ed8}.cg-panel-secondary{border-color:var(--cg-line);background:var(--cg-bg);color:var(--cg-text)}.cg-panel-secondary:hover{background:var(--cg-soft)}.cg-preview-summary{padding-bottom:12px;border-bottom:1px solid var(--cg-line)}.cg-summary-row{display:flex;align-items:baseline;justify-content:space-between;gap:12px}.cg-summary-label{color:var(--cg-muted);font-size:12px}.cg-summary-value{font-size:13px;font-weight:650;white-space:nowrap}.cg-preview-summary[data-over=true] .cg-summary-value{color:#dc2626}.cg-budget-bar{height:5px;margin-top:8px;overflow:hidden;border-radius:3px;background:var(--cg-soft)}.cg-budget-bar>span{display:block;height:100%;border-radius:inherit;background:var(--cg-accent);transition:width .18s ease}.cg-budget-bar[data-over=true]>span{background:#dc2626}.cg-budget-caption{display:block;margin-top:5px;color:var(--cg-muted);font-size:11px}.cg-panel-section{margin-top:16px}.cg-panel-section-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:5px}.cg-panel-section-title{margin:0;font-size:12px;font-weight:650}.cg-panel-count{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:18px;padding:0 6px;border-radius:5px;background:var(--cg-soft);color:var(--cg-muted);font-size:10px}.cg-panel-task{margin:0;color:var(--cg-text);font-size:12px;line-height:1.55;overflow-wrap:anywhere;white-space:pre-wrap}.cg-context-list,.cg-proposal-list{display:grid}.cg-context-item{display:flex;align-items:center;gap:8px;min-width:0;padding:9px 0;border-bottom:1px solid var(--cg-line)}.cg-context-item:last-child,.cg-proposal-item:last-child{border-bottom:0}.cg-context-item-main{min-width:0;flex:1}.cg-context-item-title{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:550}.cg-context-item-meta,.cg-context-item-reason{display:block;margin-top:2px;color:var(--cg-muted);font-size:11px;line-height:15px;overflow-wrap:anywhere}.cg-context-item>.cg-icon{width:26px;height:26px;flex:0 0 auto;font-size:14px}.cg-panel-empty{padding:10px 0;color:var(--cg-muted);font-size:12px}.cg-proposal-summary{display:flex;align-items:center;gap:8px;padding-bottom:12px;border-bottom:1px solid var(--cg-line);color:var(--cg-muted);font-size:12px}.cg-proposal-summary strong{color:var(--cg-text);font-size:13px}.cg-proposal-summary-separator{color:var(--cg-line)}.cg-proposal-item{padding:11px 0;border-bottom:1px solid var(--cg-line)}.cg-proposal-item-head{display:flex;align-items:baseline;gap:8px;min-width:0}.cg-proposal-item-title{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:650}.cg-proposal-item-count{flex:0 0 auto;color:var(--cg-muted);font-size:11px}.cg-proposal-paths{display:grid;gap:3px;margin-top:6px}.cg-proposal-path{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--cg-muted);font:11px/16px ui-monospace,SFMono-Regular,Consolas,monospace}.cg-proposal-confidence{margin-top:5px;color:var(--cg-muted);font-size:10px}.cg-panel-warning{margin:10px 0 0;padding:8px 9px;border-left:2px solid #d97706;background:var(--cg-soft);color:var(--cg-muted);font-size:11px;line-height:16px;overflow-wrap:anywhere}
+body[data-ds-dark-theme] .cg-side-panel,body[data-ds-dark-theme] .cg-panel-head,body[data-ds-dark-theme] .cg-panel-actions{background:#202023;border-color:#3f3f46}body[data-ds-dark-theme] .cg-panel-secondary{background:#202023;border-color:#48484f;color:#f4f4f5}body[data-ds-dark-theme] .cg-panel-secondary:hover,body[data-ds-dark-theme] .cg-side-panel .cg-icon:hover{background:#2b2b30;color:#fff}body[data-ds-dark-theme] .cg-panel-primary{background:#3b82f6}body[data-ds-dark-theme] .cg-panel-primary:hover:not(:disabled){background:#2563eb}body[data-ds-dark-theme] .cg-preview-summary,body[data-ds-dark-theme] .cg-context-item,body[data-ds-dark-theme] .cg-proposal-summary,body[data-ds-dark-theme] .cg-proposal-item{border-color:#3f3f46}body[data-ds-dark-theme] .cg-panel-count,body[data-ds-dark-theme] .cg-budget-bar,body[data-ds-dark-theme] .cg-panel-warning{background:#2b2b30}
+@media(max-width:560px){.cg-side-panel{top:8px;right:8px;bottom:8px;left:8px;width:auto}.cg-panel-actions{padding-bottom:max(10px,env(safe-area-inset-bottom))}}
 `;
 
 const API = '/context-graph/api';
@@ -297,6 +300,124 @@ function Inspector({ graph, selected, updateNode, updateEdge, remove, showImplem
     ], h('button', { className: 'cg-danger', type: 'button', onClick: remove }, selected.kind === 'node' ? '删除节点' : '删除连接')));
 }
 
+function focusPanel(panel) {
+  panel?.querySelector('button')?.focus({ preventScroll: true });
+}
+
+function usePanelFocus(updateKey) {
+  const panelRef = useRef(null);
+  useEffect(() => {
+    const previous = document.activeElement;
+    focusPanel(panelRef.current);
+    return () => { if (previous?.isConnected && typeof previous.focus === 'function') previous.focus({ preventScroll: true }); };
+  }, []);
+  useEffect(() => { if (panelRef.current && !panelRef.current.contains(document.activeElement)) focusPanel(panelRef.current); }, [updateKey]);
+  return panelRef;
+}
+
+function ContextPreviewPanel({ data, onClose, onExclude, onRestore }) {
+  const panelRef = usePanelFocus(data);
+  const entry = data.entry || data.target || '当前入口';
+  const included = Array.isArray(data.included) ? data.included : [];
+  const excluded = Array.isArray(data.excluded) ? data.excluded : [];
+  const sessionExcluded = new Set(data.sessionSettings?.exclude || []);
+  const usedTokens = Math.max(0, Number(data.estimatedTokens) || 0);
+  const tokenBudget = Math.max(0, Number(data.tokenBudget) || 0);
+  const budgetPercent = tokenBudget ? Math.min(100, Math.round(usedTokens / tokenBudget * 100)) : 0;
+  const renderItem = (item, index, isExcluded) => {
+    const id = item.node || item.module || '未知条目';
+    const scopes = Array.isArray(item.scope) ? item.scope : item.scope ? [item.scope] : [];
+    const scopeText = scopes.length ? scopes.join(' · ') : '未标注范围';
+    const canExclude = id !== entry && !scopes.includes('task');
+    const sessionExclusion = sessionExcluded.has(id);
+    const canRestore = sessionExclusion;
+    return h('div', { className: 'cg-context-item', key: `${id}-${scopeText}-${index}` },
+      h('div', { className: 'cg-context-item-main' },
+        h('span', { className: 'cg-context-item-title', title: id }, id),
+        h('span', { className: 'cg-context-item-meta' }, `${scopeText}${item.tokens === undefined ? '' : ` · ${item.tokens || 0} tokens`}`),
+        h('span', { className: 'cg-context-item-reason' }, `原因 · ${sessionExclusion ? '本会话排除' : item.reason || (isExcluded ? '未选择' : '自动选择')}`)),
+      isExcluded && canRestore
+        ? h(IconButton, { label: `恢复 ${id}`, onClick: () => onRestore(id) }, '↺')
+        : !isExcluded && canExclude
+          ? h(IconButton, { label: `本会话排除 ${id}`, onClick: () => onExclude(id) }, '×')
+          : null);
+  };
+
+  return h('aside', { ref: panelRef, className: 'cg-side-panel cg-preview-panel', role: 'dialog', 'aria-label': '上下文预览' },
+    h('header', { className: 'cg-panel-head' },
+      h('div', { className: 'cg-panel-heading' },
+        h('span', { className: 'cg-panel-kicker' }, 'Context Preview'),
+        h('strong', { className: 'cg-panel-title' }, '上下文预览'),
+        h('span', { className: 'cg-panel-subtitle', title: entry }, `入口 · ${entry}`)),
+      h(IconButton, { label: '关闭上下文预览', onClick: onClose }, '×')),
+    h('div', { className: 'cg-panel-body' },
+      h('section', { className: 'cg-preview-summary', 'data-over': Boolean(data.overBudget) },
+        h('div', { className: 'cg-summary-row' },
+          h('span', { className: 'cg-summary-label' }, '本轮上下文预算'),
+          h('strong', { className: 'cg-summary-value' }, `${usedTokens} / ${tokenBudget} tokens`)),
+        h('div', { className: 'cg-budget-bar', 'data-over': Boolean(data.overBudget), role: 'progressbar', 'aria-label': '上下文预算使用量', 'aria-valuemin': 0, 'aria-valuemax': tokenBudget, 'aria-valuenow': usedTokens },
+          h('span', { style: { width: `${budgetPercent}%` } })),
+        h('span', { className: 'cg-budget-caption' }, data.overBudget ? '已超过预算，必选内容仍会保留' : `剩余 ${Math.max(0, tokenBudget - usedTokens)} tokens`)),
+      h('section', { className: 'cg-panel-section' },
+        h('div', { className: 'cg-panel-section-head' }, h('h3', { className: 'cg-panel-section-title' }, '当前任务')),
+        h('p', { className: 'cg-panel-task' }, data.previewTask || '无')),
+      h('section', { className: 'cg-panel-section' },
+        h('div', { className: 'cg-panel-section-head' }, h('h3', { className: 'cg-panel-section-title' }, '已包含'), h('span', { className: 'cg-panel-count' }, included.length)),
+        h('div', { className: 'cg-context-list' }, included.length ? included.map((item, index) => renderItem(item, index, false)) : h('span', { className: 'cg-panel-empty' }, '没有已包含内容'))),
+      h('section', { className: 'cg-panel-section' },
+        h('div', { className: 'cg-panel-section-head' }, h('h3', { className: 'cg-panel-section-title' }, '已排除'), h('span', { className: 'cg-panel-count' }, excluded.length)),
+        h('div', { className: 'cg-context-list' }, excluded.length ? excluded.map((item, index) => renderItem(item, index, true)) : h('span', { className: 'cg-panel-empty' }, '没有已排除内容')))),
+    h('footer', { className: 'cg-panel-actions' },
+      h('button', { className: 'cg-panel-button cg-panel-secondary', type: 'button', onClick: onClose }, '关闭')));
+}
+
+function FunctionalProposalPanel({ proposal, graph, onClose, onConfirm }) {
+  const panelRef = usePanelFocus(proposal);
+  const nodes = Array.isArray(proposal.nodes) ? proposal.nodes : [];
+  const mappings = Array.isArray(proposal.mappings) ? proposal.mappings : [];
+  const edges = Array.isArray(proposal.edges) ? proposal.edges : [];
+  const warnings = Array.isArray(proposal.warnings) ? proposal.warnings : [];
+  const knownNodes = new Map([...(graph?.nodes || []), ...nodes].map(node => [node.id, node]));
+  const proposalItems = [...new Set([...nodes.map(node => node.id), ...mappings.map(mapping => mapping.functional)])]
+    .map(id => knownNodes.get(id) || { id, title: id, label: id });
+  const implementationCount = mappings.reduce((total, mapping) => total + (mapping.implementation?.length || 0), 0);
+  const hasChanges = nodes.length > 0 || mappings.length > 0 || edges.length > 0;
+
+  return h('aside', { ref: panelRef, className: 'cg-side-panel cg-proposal-panel', role: 'dialog', 'aria-label': '功能模块推断' },
+    h('header', { className: 'cg-panel-head' },
+      h('div', { className: 'cg-panel-heading' },
+        h('span', { className: 'cg-panel-kicker' }, 'Semantic Inference'),
+        h('strong', { className: 'cg-panel-title' }, '功能模块推断'),
+        h('span', { className: 'cg-panel-subtitle' }, '根据实现调用关系整理候选功能')),
+      h(IconButton, { label: '关闭功能模块推断', onClick: onClose }, '×')),
+    h('div', { className: 'cg-panel-body' },
+      h('div', { className: 'cg-proposal-summary' },
+        h('span', null, h('strong', null, nodes.length), ' 个新功能'),
+        h('span', { className: 'cg-proposal-summary-separator' }, '|'),
+        h('span', null, h('strong', null, implementationCount), ' 个实现映射')),
+      warnings.map((warning, index) => h('p', { className: 'cg-panel-warning', key: `${warning}-${index}` }, warning)),
+      h('section', { className: 'cg-panel-section' },
+        h('div', { className: 'cg-panel-section-head' }, h('h3', { className: 'cg-panel-section-title' }, '功能与实现映射'), h('span', { className: 'cg-panel-count' }, proposalItems.length)),
+        h('div', { className: 'cg-proposal-list' }, proposalItems.length ? proposalItems.map(node => {
+          const mapping = mappings.find(item => item.functional === node.id);
+          const implementations = Array.isArray(mapping?.implementation) ? mapping.implementation : [];
+          const confidence = Number(mapping?.confidence);
+          const isNew = nodes.some(item => item.id === node.id);
+          return h('article', { className: 'cg-proposal-item', key: node.id },
+            h('div', { className: 'cg-proposal-item-head' },
+              h('strong', { className: 'cg-proposal-item-title', title: node.title || node.label || node.id }, node.title || node.label || node.id),
+              h('span', { className: 'cg-proposal-item-count' }, `${isNew ? '新功能 · ' : ''}${implementations.length} 个实现`)),
+            h('span', { className: 'cg-context-item-reason', title: node.id }, node.id),
+            h('div', { className: 'cg-proposal-paths' }, implementations.length
+              ? implementations.map((item, index) => { const path = typeof item === 'string' ? item : item.path || item.id; return h('span', { className: 'cg-proposal-path', key: `${path}-${index}`, title: path }, path); })
+              : h('span', { className: 'cg-panel-empty' }, '未找到实现文件')),
+            Number.isFinite(confidence) ? h('div', { className: 'cg-proposal-confidence' }, `推断置信度 ${Math.round(confidence * 100)}%`) : null);
+        }) : h('span', { className: 'cg-panel-empty' }, '没有可提议的功能模块')))),
+    h('footer', { className: 'cg-panel-actions' },
+      h('button', { className: 'cg-panel-button cg-panel-secondary', type: 'button', onClick: onClose }, '关闭'),
+      h('button', { className: 'cg-panel-button cg-panel-primary', type: 'button', disabled: !hasChanges, onClick: onConfirm }, '确认加入图谱')));
+}
+
 function GraphPanel({ sessionId, projectPath, sendPrompt, setTarget }) {
   const [graph, setGraph] = useState(null);
   const [selected, setSelected] = useState(null);
@@ -318,11 +439,13 @@ function GraphPanel({ sessionId, projectPath, sendPrompt, setTarget }) {
   const [nodeMenuOpen, setNodeMenuOpen] = useState(false);
   const svgRef = useRef(null);
   const nodeMenuRef = useRef(null);
+  const overlayRequestRef = useRef(0);
   const graphRef = useRef(graph); graphRef.current = graph;
   const selectedRef = useRef(selected); selectedRef.current = selected;
   const pressRef = useRef({ key: '', time: 0 });
 
   const announce = useCallback((text, failed = false) => { setStatus(text); setError(failed); }, []);
+  const dismissOverlays = useCallback(() => { overlayRequestRef.current += 1; setHelp(false); setPreviewData(null); setFunctionalProposal(null); }, []);
   const load = useCallback(async () => {
     if (!projectPath) { setGraph(null); announce('当前会话没有工作区', true); return; }
     try {
@@ -392,26 +515,35 @@ function GraphPanel({ sessionId, projectPath, sendPrompt, setTarget }) {
     if (!projectPath) return DEFAULT_SESSION_CONTEXT;
     return request('/session-settings', { method: 'POST', body: JSON.stringify({ projectPath, sessionId, ...patch }) });
   }, [projectPath, sessionId]);
-  const showPreview = useCallback(async () => {
-    const entry = selectedRef.current?.kind === 'node' ? selectedRef.current.id : null;
+  const showPreview = useCallback(async requestedEntry => {
+    const entry = typeof requestedEntry === 'string' ? requestedEntry : selectedRef.current?.kind === 'node' ? selectedRef.current.id : null;
     if (!entry) { announce('请先选择一个入口节点', true); return; }
-    try { const settings = await getSessionSettings(); const previewTask = task.trim() || `预览 ${entry}`; const result = await request('/compile', { method: 'POST', body: JSON.stringify({ projectPath, graph: graphRef.current, entry, task: previewTask, tokenBudget: settings.tokenBudget, maxImplementationFiles: settings.maxImplementationFiles, semanticDepth: settings.semanticDepth, include: settings.include, exclude: settings.exclude }) }); setPreviewData({ ...result, sessionSettings: settings, previewTask }); }
-    catch (cause) { announce(cause.message, true); }
+    const requestId = ++overlayRequestRef.current;
+    setHelp(false);
+    setFunctionalProposal(null);
+    try { const settings = await getSessionSettings(); const previewTask = task.trim() || `预览 ${entry}`; const result = await request('/compile', { method: 'POST', body: JSON.stringify({ projectPath, graph: graphRef.current, entry, task: previewTask, tokenBudget: settings.tokenBudget, maxImplementationFiles: settings.maxImplementationFiles, semanticDepth: settings.semanticDepth, include: settings.include, exclude: settings.exclude }) }); if (overlayRequestRef.current === requestId) setPreviewData({ ...result, sessionSettings: settings, previewTask }); }
+    catch (cause) { if (overlayRequestRef.current === requestId) announce(cause.message, true); }
   }, [announce, getSessionSettings, projectPath, task]);
   const excludeFromPreview = useCallback(async id => {
-    const entry = selectedRef.current?.kind === 'node' ? selectedRef.current.id : null;
+    const entry = previewData?.entry || previewData?.target || null;
     if (!id || id === entry) return;
-    try { const settings = previewData?.sessionSettings || await getSessionSettings(); const exclude = [...new Set([...(settings.exclude || []), id])]; await updateSessionSettings({ exclude }); announce(`本会话已排除 ${id}`); void showPreview(); }
-    catch (cause) { announce(cause.message, true); }
+    const requestId = ++overlayRequestRef.current;
+    try { const settings = previewData?.sessionSettings || await getSessionSettings(); const exclude = [...new Set([...(settings.exclude || []), id])]; await updateSessionSettings({ exclude }); if (overlayRequestRef.current !== requestId) return; announce(`本会话已排除 ${id}`); void showPreview(entry); }
+    catch (cause) { if (overlayRequestRef.current === requestId) announce(cause.message, true); }
   }, [announce, getSessionSettings, previewData, showPreview, updateSessionSettings]);
   const restorePreviewNode = useCallback(async id => {
-    try { const settings = previewData?.sessionSettings || await getSessionSettings(); await updateSessionSettings({ exclude: (settings.exclude || []).filter(item => item !== id) }); announce(`已恢复 ${id}`); void showPreview(); }
-    catch (cause) { announce(cause.message, true); }
+    const entry = previewData?.entry || previewData?.target || null;
+    const requestId = ++overlayRequestRef.current;
+    try { const settings = previewData?.sessionSettings || await getSessionSettings(); await updateSessionSettings({ exclude: (settings.exclude || []).filter(item => item !== id) }); if (overlayRequestRef.current !== requestId) return; announce(`已恢复 ${id}`); void showPreview(entry); }
+    catch (cause) { if (overlayRequestRef.current === requestId) announce(cause.message, true); }
   }, [announce, getSessionSettings, previewData, showPreview, updateSessionSettings]);
   const inferFunctional = useCallback(async apply => {
     if (!projectPath) return;
-    try { const result = await request('/functional-infer', { method: 'POST', body: JSON.stringify({ projectPath, apply }) }); if (result.applied) { setGraph(result.graph); setFunctionalProposal(null); announce(`已加入 ${result.proposal.nodes.length} 个功能节点`); } else setFunctionalProposal(result.proposal); }
-    catch (cause) { announce(cause.message, true); }
+    const requestId = ++overlayRequestRef.current;
+    setHelp(false);
+    setPreviewData(null);
+    try { const result = await request('/functional-infer', { method: 'POST', body: JSON.stringify({ projectPath, apply }) }); if (result.applied) { setGraph(result.graph); if (overlayRequestRef.current === requestId) { setFunctionalProposal(null); announce(`已加入 ${result.proposal.nodes.length} 个功能节点`); } } else if (overlayRequestRef.current === requestId) setFunctionalProposal(result.proposal); }
+    catch (cause) { if (overlayRequestRef.current === requestId) announce(cause.message, true); }
   }, [announce, projectPath]);
   const submit = useCallback(async () => {
     const text = task.trim(); if (!text || sending) return;
@@ -431,11 +563,11 @@ function GraphPanel({ sessionId, projectPath, sendPrompt, setTarget }) {
       else if (!editing && (event.key === 'Delete' || event.key === 'Backspace')) { event.preventDefault(); remove(); }
       else if (!editing && event.key.toLowerCase() === 'f') fit();
       else if (!editing && event.key.toLowerCase() === 'a') layout();
-      else if (event.key === 'Escape') { setGesture(null); setSelected(null); setInspected(null); setHelp(false); setPreviewData(null); setFunctionalProposal(null); setNodeMenuOpen(false); }
+      else if (event.key === 'Escape') { setGesture(null); setSelected(null); setInspected(null); dismissOverlays(); setNodeMenuOpen(false); }
     };
     window.addEventListener('keydown', keydown);
     return () => window.removeEventListener('keydown', keydown);
-  }, [fit, layout, remove, save, submit]);
+  }, [dismissOverlays, fit, layout, remove, save, submit]);
 
   const visibleNodes = useMemo(() => {
     const mapped = new Set((graph?.mappings || []).filter(mapping => !implementationFocus || mapping.functional === implementationFocus).flatMap(mapping => mapping.implementation.map(item => item.id)));
@@ -490,7 +622,7 @@ function GraphPanel({ sessionId, projectPath, sendPrompt, setTarget }) {
       h(IconButton, { label: 'Context Preview', onClick: showPreview }, '◎'),
       h(IconButton, { label: '扫描代码', onClick: scan }, '↻'),
       h(IconButton, { label: '保存 (Ctrl+S)', onClick: save }, '⌑'),
-      h(IconButton, { label: '快捷键', onClick: () => setHelp(value => !value) }, '?')),
+      h(IconButton, { label: '快捷键', onClick: () => { overlayRequestRef.current += 1; setPreviewData(null); setFunctionalProposal(null); setHelp(value => !value); } }, '?')),
     h('div', { className: 'cg-canvas-wrap' },
       h('svg', { ref: svgRef, className: 'cg-canvas', 'data-dragging': Boolean(gesture), onPointerDown: startPan, onPointerMove: move, onPointerUp: stop, onPointerCancel: stop,
         onWheel: event => { event.preventDefault(); const before = point(event); const zoom = Math.min(2, Math.max(.25, view.zoom * (event.deltaY > 0 ? .9 : 1.1))); const rect = svgRef.current.getBoundingClientRect(); setView({ zoom, x: event.clientX - rect.left - before.x * zoom, y: event.clientY - rect.top - before.y * zoom }); } },
@@ -514,8 +646,8 @@ function GraphPanel({ sessionId, projectPath, sendPrompt, setTarget }) {
       h(Inspector, { graph: graph || { nodes: [], edges: [], mappings: [] }, selected: inspected, updateNode, updateEdge, remove, showImplementation: id => { setImplementationFocus(id); setViewMode('implementation'); } }),
       help ? h('section', { className: 'cg-help' }, h('h3', null, '快捷键'), h('dl', null,
         h('dt', null, 'Ctrl/⌘ + S'), h('dd', null, '保存图谱'), h('dt', null, 'Ctrl/⌘ + Enter'), h('dd', null, '发送任务'), h('dt', null, 'Delete'), h('dd', null, '删除所选节点或连接'), h('dt', null, 'F'), h('dd', null, '适合画布'), h('dt', null, 'A'), h('dd', null, '自动排布'), h('dt', null, 'Esc'), h('dd', null, '取消连接或选择'), h('dt', null, '拖动端口'), h('dd', null, '手动创建连接'))) : null,
-      previewData ? h('section', { className: 'cg-help' }, h('h3', null, `Context Preview · ${previewData.entry || previewData.target}`), h('dl', null, h('dt', null, '预算'), h('dd', null, `${previewData.estimatedTokens} / ${previewData.tokenBudget} Tokens${previewData.overBudget ? '（已超预算）' : ''}`), h('dt', null, '任务'), h('dd', null, previewData.previewTask || '无')), h('h3', { className: 'cg-preview-heading' }, '已包含'), h('div', { className: 'cg-preview-list' }, previewData.included.length ? previewData.included.map((item, index) => h('div', { key: `${item.node || item.module}-${item.scope}-${index}` }, h('span', null, `${item.node || item.module}:${item.scope} · ${item.tokens || 0} tokens (${item.reason || 'selected'})`), item.node !== (previewData.entry || previewData.target) && item.scope !== 'task' ? h(IconButton, { label: `本会话排除 ${item.node || item.module}`, onClick: () => void excludeFromPreview(item.node || item.module) }, '×') : null)) : h('span', null, '无')), h('h3', { className: 'cg-preview-heading' }, '已排除'), h('div', { className: 'cg-preview-list' }, previewData.excluded.length ? previewData.excluded.map((item, index) => h('div', { key: `${item.node || item.module}-${item.reason}-${index}` }, h('span', null, `${item.node || item.module}:${item.reason}`), item.reason === 'FORCE_EXCLUDE' ? null : h(IconButton, { label: `恢复 ${item.node || item.module}`, onClick: () => void restorePreviewNode(item.node || item.module) }, '↺'))) : h('span', null, '无')), h('button', { className: 'cg-danger', type: 'button', onClick: () => setPreviewData(null) }, '关闭')) : null,
-      functionalProposal ? h('section', { className: 'cg-help' }, h('h3', null, '功能模块推断'), h('p', null, functionalProposal.nodes.map(node => `${node.title} ← ${functionalProposal.mappings.find(mapping => mapping.functional === node.id)?.implementation.map(item => item.path || item.id).join(', ') || ''}`).join('\n') || '没有可提议的功能模块'), h('button', { type: 'button', onClick: () => void inferFunctional(true) }, '确认加入图谱'), h('button', { className: 'cg-danger', type: 'button', onClick: () => setFunctionalProposal(null) }, '关闭')) : null),
+      previewData ? h(ContextPreviewPanel, { data: previewData, onClose: dismissOverlays, onExclude: id => void excludeFromPreview(id), onRestore: id => void restorePreviewNode(id) }) : null,
+      functionalProposal ? h(FunctionalProposalPanel, { proposal: functionalProposal, graph, onClose: dismissOverlays, onConfirm: () => void inferFunctional(true) }) : null),
     );
 }
 
