@@ -105,6 +105,8 @@ Context Compiler 从任务或功能节点开始，先遍历需求、约束、决
 
 `skills/dependency-interface/SKILL.md` 随插件发布。它将 Python AST 分析作为独立的工程依赖事实发现层：输出模块、符号级关系、接口 Contract、代码证据及置信度；不保存 Context Graph、不修改业务代码，也不决定模型最终上下文。Context Graph 的更新仍必须经 `context_graph_save` 显式确认，`FORCE_INCLUDE` 和 `FORCE_EXCLUDE` 永远优先于自动分析。
 
+依赖分析支持工作区外层包目录与 Python import 包根不同的布局（例如 `starlette/starlette/*.py`），也支持包内相对导入。关系目标保留扫描得到的规范模块 ID，并通过唯一包根别名解析源码 import；存在多个候选时不会猜测或写入关系。用户确认的 `MANUAL` 边会被一致性检查保留，不会作为陈旧自动关系建议删除。
+
 ## Harness 对话视图
 
 打开 `http://127.0.0.1:3080/` 后，Context Graph 作为 DSH client 插件注册到官方 `conversation.view` 槽，与“对话”和“轨迹”并列。不存在 `/context-graph/` 独立页面，也不占用右侧详情栏。

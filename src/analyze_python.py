@@ -23,6 +23,41 @@ def module_name(root: Path, file_path: Path) -> str:
     return ".".join(parts) or root.name
 
 
+def package_name(root: Path, file_path: Path) -> str:
+    rel = file_path.relative_to(root).with_suffix("")
+    parts = list(rel.parts)
+    if parts:
+        parts.pop()
+    return ".".join(parts)
+
+
+def resolve_module(value, known):
+    """Map an import name to one unambiguous path-derived module id."""
+    value = (value or "").strip().lstrip(".")
+    if not value:
+        return None
+    direct = [item for item in known if value == item or value.startswith(item + ".")]
+    if direct:
+        return max(direct, key=len)
+    parts = value.split(".")
+    for end in range(len(parts), 0, -1):
+        alias = ".".join(parts[:end])
+        matches = sorted(item for item in known if item.endswith("." + alias))
+        if matches:
+            return matches[0] if len(matches) == 1 else None
+    return None
+
+
+def resolve_import_base(current_module, is_package, imported_module, level):
+    if level == 0:
+        return imported_module or ""
+    package = current_module if is_package else current_module.rpartition(".")[0]
+    parts = package.split(".") if package else []
+    ascend = level - 1
+    parent = parts[:max(0, len(parts) - ascend)]
+    return ".".join(parent + ((imported_module or "").split(".") if imported_module else []))
+
+
 class UsageVisitor(ast.NodeVisitor):
     def __init__(self):
         self.calls = set()
@@ -61,10 +96,10 @@ def analyze(root: Path):
     source_files = sorted(
         file_path for file_path in root.rglob("*")
         if file_path.is_file() and (file_path.suffix == ".py" or file_path.suffix.lower() in C_EXTENSIONS)
+        and not any(part in ignored for part in file_path.parts)
     )
+    known_python = {module_name(root, file_path) for file_path in source_files if file_path.suffix == ".py"}
     for file_path in source_files:
-        if any(part in ignored for part in file_path.parts):
-            continue
         if file_path.suffix.lower() in C_EXTENSIONS:
             try:
                 text = file_path.read_text(encoding="utf-8")
@@ -99,10 +134,17 @@ def analyze(root: Path):
         inheritance = []
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
-                imports.extend(alias.name for alias in node.names)
+                imports.extend(resolve_module(alias.name, known_python) or alias.name for alias in node.names)
             elif isinstance(node, ast.ImportFrom):
-                base = "." * node.level + (node.module or "")
-                imports.extend(f"{base}.{alias.name}".rstrip(".") for alias in node.names)
+                base = resolve_import_base(package_name(root, file_path), True, node.module, node.level)
+                base_target = resolve_module(base, known_python)
+                for alias in node.names:
+                    if alias.name == "*":
+                        if base_target or base:
+                            imports.append(base_target or base)
+                        continue
+                    candidate = f"{base}.{alias.name}" if base else alias.name
+                    imports.append(resolve_module(candidate, known_python) or base_target or base or candidate)
             elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 symbols.append({"name": node.name, "kind": "function", "line": node.lineno})
             elif isinstance(node, ast.ClassDef):

@@ -111,7 +111,7 @@ export function createTaskNode(graph, { content, title = '', taskType = 'develop
 function edgeKey(source, target) { return `${source}\0${target}`; }
 
 export async function analyzeProject(projectPath) {
-  const executables = process.platform === 'win32' ? ['py', 'python'] : ['python3', 'python'];
+  const executables = [process.env.DEPENDENCY_SKILL_PYTHON, ...(process.platform === 'win32' ? ['py', 'python'] : ['python3', 'python'])].filter(Boolean);
   let lastError;
   for (const executable of executables) {
     try {
@@ -127,6 +127,31 @@ export async function analyzeProject(projectPath) {
 async function analyzePythonFallback(projectPath, lastError) {
   const root = path.resolve(projectPath);
   const modules = [];
+  const fallbackModuleId = relative => {
+    const id = relative.replace(/\.(?:py|c|cc|cpp|cxx)$/i, '').replace(/(?:^|\/)__init__$/, '').replaceAll('/', '.');
+    return id || path.basename(root);
+  };
+  const relativePythonImports = (source, relative, id) => {
+    const imports = [...source.matchAll(/^\s*import\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)/gm)].map(match => match[1]);
+    const packageId = relative.endsWith('/__init__.py') || relative === '__init__.py'
+      ? (id === path.basename(root) ? '' : id)
+      : id.split('.').slice(0, -1).join('.');
+    for (const match of source.matchAll(/^\s*from\s+([.]*)\s*([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)?\s+import(?:\s+([A-Za-z_]\w*|\*))?/gm)) {
+      const dots = match[1] || '';
+      const importedModule = match[2] || '';
+      const level = dots.length;
+      let base = importedModule;
+      if (level > 0) {
+        const parts = packageId ? packageId.split('.') : [];
+        const parent = parts.slice(0, Math.max(0, parts.length - level + 1));
+        base = [...parent, ...(importedModule ? importedModule.split('.') : [])].join('.');
+      }
+      const name = match[3];
+      const imported = !name || name === '*' ? base : base ? `${base}.${name}` : name;
+      if (imported) imports.push(imported);
+    }
+    return imports;
+  };
   async function walk(dir) {
     let entries;
     try { entries = await readdir(dir, { withFileTypes: true }); } catch { return; }
@@ -137,7 +162,7 @@ async function analyzePythonFallback(projectPath, lastError) {
       else if (entry.isFile() && ['.py', '.c', '.cc', '.cpp', '.cxx'].includes(path.extname(entry.name).toLowerCase())) {
         const rel = path.relative(root, file).replaceAll(path.sep, '/');
         const extension = path.extname(rel).toLowerCase();
-        const id = rel.replace(/\.(?:py|c|cc|cpp|cxx)$/i, '').replace(/\/__init__$/, '').replaceAll('/', '.');
+        const id = fallbackModuleId(rel);
         const source = await optionalRead(file);
         const isPython = extension === '.py';
         modules.push({
@@ -145,7 +170,7 @@ async function analyzePythonFallback(projectPath, lastError) {
           path: rel,
           language: isPython ? 'python' : extension === '.c' ? 'c' : 'cpp',
           imports: isPython
-            ? [...source.matchAll(/^\s*(?:from|import)\s+([\w.]+)/gm)].map((match) => match[1])
+            ? relativePythonImports(source, rel, id)
             : [...source.matchAll(/^\s*#\s*include\s*[<"]([^">]+)[">]/gm)].map((match) => match[1]),
           calls: [...source.matchAll(/\b([A-Za-z_]\w*)\s*\(/g)].map((match) => match[1]),
           references: [],
@@ -163,7 +188,15 @@ async function analyzePythonFallback(projectPath, lastError) {
 
 function importTarget(importName, moduleIds) {
   const normalized = importName.replace(/^\.+/, '').replaceAll('/', '.').replace(/\.(?:h|hh|hpp|hxx|c|cc|cpp|cxx)$/i, '');
-  return [...moduleIds].sort((a, b) => b.length - a.length).find((id) => normalized === id || normalized.startsWith(`${id}.`) || id.endsWith(`.${normalized}`));
+  const direct = [...moduleIds].filter(id => normalized === id || normalized.startsWith(`${id}.`)).sort((a, b) => b.length - a.length);
+  if (direct.length) return direct[0];
+  const parts = normalized.split('.');
+  for (let end = parts.length; end > 0; end -= 1) {
+    const alias = parts.slice(0, end).join('.');
+    const matches = [...moduleIds].filter(id => id.endsWith(`.${alias}`)).sort();
+    if (matches.length) return matches.length === 1 ? matches[0] : undefined;
+  }
+  return undefined;
 }
 
 function positionsOverlap(left, right) {

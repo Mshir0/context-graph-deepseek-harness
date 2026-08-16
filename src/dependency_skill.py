@@ -16,6 +16,11 @@ def dotted(node):
 
 def annotation(node): return ast.unparse(node) if node is not None else "unknown"
 
+def package_id(root, file):
+    parts = list(file.relative_to(root).with_suffix("").parts)
+    if parts: parts.pop()
+    return ".".join(parts)
+
 def module_id(root, file):
     parts = list(file.relative_to(root).with_suffix("").parts)
     if parts[-1:] == ["__init__"]: parts.pop()
@@ -25,12 +30,40 @@ def source_evidence(file, source, node):
     return {"file": str(file).replace("\\", "/"), "line": node.lineno, "evidence": ast.get_source_segment(source, node) or ""}
 
 def longest_module(value, known):
-    matches = [item for item in known if value == item or value.startswith(item + ".")]
-    return max(matches, key=len) if matches else None
+    """Resolve an import/reference name to the canonical scanned module id.
+
+    Module ids are derived from paths relative to the analysis root.  A
+    workspace can therefore contain an extra directory above the importable
+    package (for example ``starlette/starlette/datastructures.py`` scanned
+    from the workspace parent).  In that layout the canonical id is
+    ``starlette.starlette.datastructures`` while the source imports
+    ``starlette.datastructures``.  Treat a known id that ends with the import
+    name as an alias, while retaining the path-derived id as the relationship
+    target.  Exact/prefix matches remain preferred so normal projects keep
+    their existing behaviour.
+    """
+    value = (value or "").strip().lstrip(".")
+    if not value: return None
+    exact = [item for item in known if value == item or value.startswith(item + ".")]
+    if exact: return max(exact, key=len)
+    # References include a symbol suffix (``package.module.Class``), so try
+    # each import-prefix before applying the package-root alias.  This keeps
+    # both ``from package.module import Class`` and a later ``Class()``
+    # reference attached to the same canonical module.
+    parts = value.split(".")
+    for end in range(len(parts), 0, -1):
+        alias = ".".join(parts[:end])
+        aliases = sorted(item for item in known if item.endswith("." + alias))
+        if aliases:
+            # Two source roots may expose the same import package.  Guessing
+            # here would create a convincing but false dependency edge.
+            return aliases[0] if len(aliases) == 1 else None
+    return None
 
 class Facts(ast.NodeVisitor):
-    def __init__(self, module, file, source, known):
+    def __init__(self, module, file, source, known, is_package=False, package=None):
         self.module, self.file, self.source, self.known = module, file, source, known
+        self.package = package if package is not None else module if is_package else module.rpartition(".")[0]
         self.tree = ast.parse(source, filename=file)
         self.relations, self.interfaces, self.symbols = [], [], []
         self.aliases, self.instances, self.scope = {}, {}, []
@@ -44,28 +77,42 @@ class Facts(ast.NodeVisitor):
 
     def resolve_import(self, module, level):
         if level == 0: return module or ""
-        parent = self.module.split(".")[:-1]
-        parent = parent[:max(0, len(parent) - level + 1)]
+        package = self.package.split(".") if self.package else []
+        ascend = level - 1
+        parent = package[:max(0, len(package) - ascend)]
         return ".".join(parent + ((module or "").split(".") if module else []))
 
+    def resolve_name(self, value):
+        head, separator, tail = value.partition(".")
+        resolved = self.instances.get(head) or self.aliases.get(head)
+        if not resolved: return value
+        return f"{resolved}.{tail}" if separator else resolved
+
     def reference(self, value, kind, node):
-        head = value.split(".")[0]
-        resolved = self.instances.get(head) or self.aliases.get(head) or value
+        resolved = self.resolve_name(value)
         target = longest_module(resolved, self.known)
         if target and target != self.module: self.relation(target, kind, node, resolved)
 
     def visit_Import(self, node):
         for item in node.names:
-            self.aliases[item.asname or item.name.split(".")[0]] = item.name
+            binding = item.asname or item.name.split(".")[0]
+            self.aliases[binding] = item.name if item.asname else binding
             target = longest_module(item.name, self.known)
             if target and target != self.module: self.relation(target, "IMPORT", node, item.name)
 
     def visit_ImportFrom(self, node):
         base = self.resolve_import(node.module, node.level)
-        target = longest_module(base, self.known)
-        if target and target != self.module: self.relation(target, "IMPORT", node, base)
+        base_target = longest_module(base, self.known)
         for item in node.names:
-            if item.name != "*": self.aliases[item.asname or item.name] = f"{base}.{item.name}" if base else item.name
+            if item.name == "*":
+                if base_target and base_target != self.module: self.relation(base_target, "IMPORT", node, base)
+                continue
+            imported = f"{base}.{item.name}" if base else item.name
+            target = longest_module(imported, self.known) or base_target
+            if target and target != self.module:
+                symbol = imported if target != base_target else base
+                self.relation(target, "IMPORT", node, symbol)
+            self.aliases[item.asname or item.name] = imported
 
     def visit_FunctionDef(self, node):
         name = ".".join(self.scope + [node.name]); self.symbols.append({"name": name, "kind": "function", "line": node.lineno})
@@ -86,7 +133,7 @@ class Facts(ast.NodeVisitor):
         if isinstance(node.value, ast.Call):
             value = dotted(node.value.func)
             if value:
-                resolved = self.aliases.get(value.split(".")[0], value)
+                resolved = self.resolve_name(value)
                 for target in node.targets:
                     if isinstance(target, ast.Name): self.instances[target.id] = resolved
         self.generic_visit(node)
@@ -95,11 +142,7 @@ class Facts(ast.NodeVisitor):
         value = dotted(node.func)
         if value in {"getattr", "__import__"} or (value and "load_" in value): self.relation("?", "OPTIONAL_DEPENDENCY", node, value, 0.42, dynamic=True, reason="Runtime symbol resolution required")
         elif value:
-            head = value.split(".")[0]
-            resolved = self.instances.get(head) or self.aliases.get(head) or value
-            if head in self.instances and "." in value:
-                resolved = f"{resolved}.{value.split('.', 1)[1]}"
-            self.reference(resolved, "CALL", node)
+            self.reference(value, "CALL", node)
         self.generic_visit(node)
 
     def visit_Name(self, node):
@@ -114,7 +157,7 @@ def analyze(root, selected_files=None):
     for file in files:
         relative = file.relative_to(root).as_posix()
         try:
-            facts = Facts(module_id(root, file), relative, file.read_text(encoding="utf-8"), known); facts.visit(facts.tree)
+            facts = Facts(module_id(root, file), relative, file.read_text(encoding="utf-8"), known, file.name == "__init__.py", package_id(root, file)); facts.visit(facts.tree)
             modules.append({"id": facts.module, "path": relative, "language": "python", "symbols": facts.symbols}); relations.extend(facts.relations); interfaces.extend(facts.interfaces)
         except (SyntaxError, UnicodeError, OSError) as exc: errors.append({"file": relative, "error": str(exc)})
     return {"version": 1, "language": "python", "modules": modules, "relationships": relations, "interfaces": interfaces, "errors": errors, "analyzed_files": [item.relative_to(root).as_posix() for item in files]}

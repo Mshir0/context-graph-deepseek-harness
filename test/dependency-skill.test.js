@@ -26,9 +26,11 @@ test('extracts Python AST dependencies, calls, interfaces, and dynamic facts', a
 test('proposes interfaces and preserves manual graph relationships in consistency checks', () => {
   const facts = { relationships: [{ from: 'a', to: 'b', type: 'CALL', symbol: 'b.api', confidence: 1, evidence: [{ file: 'a.py', line: 1, evidence: 'b.api()' }] }] };
   assert.deepEqual(proposeContextEdges(facts), [{ from: 'a', to: 'b', proposed_type: 'interface', recommended_scope: ['interface', 'context'], reason: 'a calls b.api', confidence: 1, evidence: facts.relationships[0].evidence }]);
-  const report = checkConsistency(facts, { edges: [{ source: 'a', target: 'b', type: 'force_exclude', mode: 'FORCE_EXCLUDE' }, { source: 'b', target: 'gone', type: 'interface', mode: 'AUTO' }] });
+  const report = checkConsistency(facts, { edges: [{ source: 'a', target: 'b', type: 'force_exclude', mode: 'FORCE_EXCLUDE' }, { source: 'b', target: 'gone', type: 'interface', mode: 'AUTO' }, { source: 'a', target: 'manual', type: 'interface', mode: 'MANUAL' }, { source: 'a', target: 'lowercase-manual', type: 'interface', mode: 'manual' }] });
   assert.equal(report.stale.length, 1);
-  assert.equal(report.protected.length, 1);
+  assert.equal(report.protected.length, 3);
+  assert.ok(report.protected.some(edge => edge.source === 'a' && edge.target === 'manual' && edge.mode === 'MANUAL'));
+  assert.ok(report.protected.some(edge => edge.target === 'lowercase-manual' && edge.mode === 'manual'));
   assert.equal(report.conflicts.length, 1);
 });
 

@@ -42,7 +42,11 @@ export function proposeContextEdges(facts, module = null) {
   return [...proposals.values()].sort((left, right) => edgeKey(left.from, left.to).localeCompare(edgeKey(right.from, right.to)));
 }
 
-const isManual = edge => edge.mode === 'FORCE_INCLUDE' || edge.mode === 'FORCE_EXCLUDE' || edge.type === 'force_include' || edge.type === 'force_exclude';
+const isManual = edge => {
+  const mode = String(edge.mode || '').toUpperCase();
+  const type = String(edge.type || '').toLowerCase();
+  return mode === 'MANUAL' || mode === 'FORCE_INCLUDE' || mode === 'FORCE_EXCLUDE' || type === 'force_include' || type === 'force_exclude';
+};
 export function checkConsistency(facts, graph) {
   const graphEdges = graph?.edges || []; const present = new Set(graphEdges.map(edge => edgeKey(edge.source, edge.target)));
   const missing = proposeContextEdges(facts).filter(item => !present.has(edgeKey(item.from, item.to)));
