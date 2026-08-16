@@ -1,11 +1,18 @@
 #!/usr/bin/env python3
-"""Emit a language-neutral code graph for a Python project."""
+"""Emit a lightweight code graph for Python and C-family projects."""
 
 import ast
 import json
 import os
+import re
 import sys
 from pathlib import Path
+
+
+C_EXTENSIONS = {".c": "c", ".cc": "cpp", ".cpp": "cpp", ".cxx": "cpp"}
+INCLUDE_RE = re.compile(r'^\s*#\s*include\s*[<"]([^">]+)[">]', re.MULTILINE)
+FUNCTION_RE = re.compile(r'^\s*(?:[A-Za-z_]\w*\s+)*[A-Za-z_]\w*\s+([A-Za-z_]\w*)\s*\([^;{}]*\)\s*\{', re.MULTILINE)
+CALL_RE = re.compile(r'\b([A-Za-z_]\w*)\s*\(')
 
 
 def module_name(root: Path, file_path: Path) -> str:
@@ -51,8 +58,34 @@ def analyze(root: Path):
     modules = []
     errors = []
     ignored = {".git", ".context", "node_modules", ".venv", "venv", "__pycache__"}
-    for file_path in sorted(root.rglob("*.py")):
+    source_files = sorted(
+        file_path for file_path in root.rglob("*")
+        if file_path.is_file() and (file_path.suffix == ".py" or file_path.suffix.lower() in C_EXTENSIONS)
+    )
+    for file_path in source_files:
         if any(part in ignored for part in file_path.parts):
+            continue
+        if file_path.suffix.lower() in C_EXTENSIONS:
+            try:
+                text = file_path.read_text(encoding="utf-8")
+            except (OSError, UnicodeError) as exc:
+                errors.append({"file": str(file_path.relative_to(root)), "error": str(exc)})
+                continue
+            calls = sorted(set(CALL_RE.findall(text)))
+            symbols = [
+                {"name": match.group(1), "kind": "function", "line": text[:match.start()].count("\n") + 1}
+                for match in FUNCTION_RE.finditer(text)
+            ]
+            modules.append({
+                "id": module_name(root, file_path),
+                "path": str(file_path.relative_to(root)).replace(os.sep, "/"),
+                "language": C_EXTENSIONS[file_path.suffix.lower()],
+                "imports": sorted(set(INCLUDE_RE.findall(text))),
+                "calls": calls,
+                "references": [],
+                "inheritance": [],
+                "symbols": sorted(symbols, key=lambda item: (item["line"], item["name"])),
+            })
             continue
         try:
             text = file_path.read_text(encoding="utf-8")

@@ -72,11 +72,26 @@ async function analyzePythonFallback(projectPath, lastError) {
       if (['.git', '.context', 'node_modules', '.venv', 'venv', '__pycache__'].includes(entry.name)) continue;
       const file = path.join(dir, entry.name);
       if (entry.isDirectory()) await walk(file);
-      else if (entry.isFile() && entry.name.endsWith('.py')) {
+      else if (entry.isFile() && ['.py', '.c', '.cc', '.cpp', '.cxx'].includes(path.extname(entry.name).toLowerCase())) {
         const rel = path.relative(root, file).replaceAll(path.sep, '/');
-        const id = rel.replace(/\.py$/, '').replace(/\/__init__$/, '').replaceAll('/', '.');
+        const extension = path.extname(rel).toLowerCase();
+        const id = rel.replace(/\.(?:py|c|cc|cpp|cxx)$/i, '').replace(/\/__init__$/, '').replaceAll('/', '.');
         const source = await optionalRead(file);
-        modules.push({ id: id || path.basename(root), path: rel, language: 'python', imports: [...source.matchAll(/^\s*(?:from|import)\s+([\w.]+)/gm)].map((match) => match[1]), calls: [...source.matchAll(/\b([A-Za-z_]\w*)\s*\(/g)].map((match) => match[1]), references: [], inheritance: [], symbols: [...source.matchAll(/^\s*(?:async\s+)?def\s+(\w+)/gm)].map((match) => ({ name: match[1], kind: 'function' })) });
+        const isPython = extension === '.py';
+        modules.push({
+          id: id || path.basename(root),
+          path: rel,
+          language: isPython ? 'python' : extension === '.c' ? 'c' : 'cpp',
+          imports: isPython
+            ? [...source.matchAll(/^\s*(?:from|import)\s+([\w.]+)/gm)].map((match) => match[1])
+            : [...source.matchAll(/^\s*#\s*include\s*[<"]([^">]+)[">]/gm)].map((match) => match[1]),
+          calls: [...source.matchAll(/\b([A-Za-z_]\w*)\s*\(/g)].map((match) => match[1]),
+          references: [],
+          inheritance: [],
+          symbols: isPython
+            ? [...source.matchAll(/^\s*(?:async\s+)?def\s+(\w+)/gm)].map((match) => ({ name: match[1], kind: 'function' }))
+            : [...source.matchAll(/^\s*(?:[A-Za-z_]\w*\s+)*[A-Za-z_]\w*\s+([A-Za-z_]\w*)\s*\([^;{}]*\)\s*\{/gm)].map((match) => ({ name: match[1], kind: 'function' })),
+        });
       }
     }
   }
@@ -85,7 +100,7 @@ async function analyzePythonFallback(projectPath, lastError) {
 }
 
 function importTarget(importName, moduleIds) {
-  const normalized = importName.replace(/^\.+/, '');
+  const normalized = importName.replace(/^\.+/, '').replaceAll('/', '.').replace(/\.(?:h|hh|hpp|hxx|c|cc|cpp|cxx)$/i, '');
   return [...moduleIds].sort((a, b) => b.length - a.length).find((id) => normalized === id || normalized.startsWith(`${id}.`) || id.endsWith(`.${normalized}`));
 }
 

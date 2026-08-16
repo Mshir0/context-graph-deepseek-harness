@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { compileContext, emptyGraph, reconcileGraphs, validateGraph } from '../src/core.js';
+import { analyzeProject, compileContext, emptyGraph, reconcileGraphs, validateGraph } from '../src/core.js';
 import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -20,6 +20,17 @@ test('reconciles missing and stale code/context edges', () => {
   const result = reconcileGraphs({ modules: [{ id: 'a', path: 'a.py', imports: ['b'] }, { id: 'b', path: 'b.py', imports: [] }, { id: 'c', path: 'c.py', imports: [] }] }, graph);
   assert.ok(result.suggestions.some((item) => item.kind === 'missing' && item.target === 'b'));
   assert.ok(result.suggestions.some((item) => item.kind === 'stale' && item.target === 'c'));
+});
+
+test('scans C source files and resolves quoted includes to project modules', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'context-graph-c-'));
+  await writeFile(path.join(root, 'hello.c'), '#include "helper.h"\nint main(void) { return helper(); }\n');
+  await writeFile(path.join(root, 'helper.c'), 'int helper(void) { return 0; }\n');
+  const codeGraph = await analyzeProject(root);
+  assert.deepEqual(codeGraph.modules.map(module => module.id), ['hello', 'helper']);
+  assert.equal(codeGraph.modules.find(module => module.id === 'hello').language, 'c');
+  const result = reconcileGraphs(codeGraph, emptyGraph(root));
+  assert.ok(result.suggestions.some(item => item.kind === 'missing' && item.source === 'hello' && item.target === 'helper'));
 });
 
 test('compiler prioritizes target, honors force exclude, and respects budget', async () => {
