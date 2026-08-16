@@ -31,13 +31,13 @@ DSH model adapter (DeepSeek / other configured provider)
 ```bash
 git clone https://github.com/Mshir0/context-graph-deepseek-harness.git
 cd context-graph-deepseek-harness
-dsh plugin --profile default add .
+dsh plugin --profile default add -w .
 ```
 
 也可以直接从 GitHub 安装：
 
 ```bash
-dsh plugin --profile default add github:Mshir0/context-graph-deepseek-harness
+dsh plugin --profile default add -w github:Mshir0/context-graph-deepseek-harness
 ```
 
 确认 bundle 已进入组合配置并启动 Harness：

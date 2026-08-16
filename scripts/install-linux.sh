@@ -18,6 +18,6 @@ fi
 
 profile=${DSH_PROFILE:-default}
 chmod +x src/analyze_python.py scripts/install-linux.sh
-dsh plugin --profile "$profile" add .
+dsh plugin --profile "$profile" add -w .
 echo "Installed into DeepSeek Harness profile: $profile"
 echo "Verify with: dsh --profile $profile --dump-config"
