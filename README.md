@@ -59,7 +59,8 @@ pnpm dsh web
 - `context_graph_add_node` / `context_graph_add_edge`：保存单个已确认的 Context Node 或手工关系。
 - `context_extract`：从单条用户或 AI 消息提取可追溯的 Task、Requirement、Constraint、Decision 或 Issue Proposal；仅在 `apply=true` 时保存。
 - `context_detect_conflicts`：检查尚未通过 `supersedes` 解决的潜在结构化上下文冲突。
-- `context_select`：为当前 DSH Session 指定目标模块以及强制加入/排除项。
+- `context_select`：为当前 DSH Session 指定目标模块以及临时加入/排除项。
+- `context_session_config`：仅为当前 DSH Session 设置自动注入开关、单轮预算、上下文复用和临时包含/排除；不改写图谱或代码。
 - `context_compile`：预览 token 预算下最终会注入的上下文。
 - `context_git_summary`：读取当前 workspace 的相关 Git 状态和历史。
 - `functional_infer`：从已分析的实现模块生成待确认的功能节点、功能关系和多对多实现映射；仅在 `apply=true` 时保存。
@@ -78,7 +79,7 @@ pnpm dsh web
 2. 根据当前用户任务和 Session 的 `context_select` 状态确定目标模块。
 3. 编译目标源码、结构化记忆、最小依赖接口和相关 Git 历史。
 4. 以 `source.kind = plugin` 的 DSH 用户消息注入当前 step。
-5. 对相同任务和相同内容去重，避免每个 step 重复膨胀上下文。
+5. 对相同任务去重；当连续任务的目标和已编译上下文完全未变化时，复用先前上下文而不重复注入。
 
 如果目标模块无法可靠推断，插件不会猜测或加载全工程；Agent 可调用 `context_select` 明确目标。
 
@@ -116,6 +117,8 @@ Context Compiler 从任务或功能节点开始，先遍历需求、约束、决
 - 从节点右端口拖到另一节点左端口，手动创建连接。
 - 编辑关系类型、scope 和 `AUTO / MANUAL / FORCE_INCLUDE / FORCE_EXCLUDE`。
 - 从当前选择的任意 Context Entry 打开 Context Preview。
+- “上下文”弹层可按当前对话关闭自动注入、选择 2k-16k 单轮预算、限制相关实现文件和语义关联层数，并控制是否复用未变化上下文。
+- Context Preview 显示已用预算、每项 Token 与原因；可将单项仅排除出当前对话，不改变永久图谱。
 - 语义、实现、当前上下文三种视图；语义视图默认隐藏实现细节。
 - 扫描实现后使用“推断功能模块”预览功能归并，再确认加入图谱。
 - `Ctrl/⌘ + S` 保存、`Delete` 删除、`F` 适合画布、`A` 自动排布、`Esc` 取消。
@@ -130,7 +133,7 @@ Context Compiler 从任务或功能节点开始，先遍历需求、约束、决
     - id: context-graph
       name: dsh-context-graph
       config:
-        tokenBudget: 16000
+        tokenBudget: 6000
         autoScan: true
         autoInject: true
         webUi: true

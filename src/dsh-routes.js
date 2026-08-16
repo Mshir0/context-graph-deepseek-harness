@@ -1,19 +1,21 @@
 import { realpath } from 'node:fs/promises';
+import { resolve as resolvePath } from 'node:path';
 import { analyzeProject, compileContext, ensureMemory, gitSummary, loadGraph, reconcileGraphs, saveGraph } from './core.js';
 import { analyzeDependencies } from './dependency-skill.js';
 import { applyFunctionalInference, inferFunctionalModules } from './semantic-functional.js';
+import { resolveSessionContextSettings, updateSessionContextSettings } from './session-context.js';
 
 const PREFIX = '/context-graph';
 const BODY_CAP = 2 * 1024 * 1024;
 
-export function registerContextGraphRoutes(ctx, config) {
-  return ctx.webServer.register({ kind: 'prefix', path: PREFIX, handler: (req, res) => handle(ctx, config, req, res) });
+export function registerContextGraphRoutes(ctx, config, sessionState = new Map()) {
+  return ctx.webServer.register({ kind: 'prefix', path: PREFIX, handler: (req, res) => handle(ctx, config, sessionState, req, res) });
 }
 
-async function handle(ctx, config, req, res) {
+async function handle(ctx, config, sessionState, req, res) {
   try {
     const url = new URL(req.url || '/', 'http://dsh.local');
-    if (url.pathname.startsWith(`${PREFIX}/api/`)) return await api(ctx, config, req, res, url);
+    if (url.pathname.startsWith(`${PREFIX}/api/`)) return await api(ctx, config, sessionState, req, res, url);
     return json(res, 404, { error: 'Context Graph is available in the DeepSeek Harness details panel' });
   } catch (error) {
     ctx.logger.warn(`context-graph route failed: ${String(error)}`);
@@ -21,19 +23,35 @@ async function handle(ctx, config, req, res) {
   }
 }
 
-async function api(ctx, config, req, res, url) {
+async function api(ctx, config, sessionState, req, res, url) {
   if (req.method === 'GET' && url.pathname === `${PREFIX}/api/config`) {
     const workspaces = ctx.workspaceRegistry.list().map(item => item.path);
-    return json(res, 200, { projectPath: workspaces[0] || '', workspaces, tokenBudget: config.tokenBudget });
+    return json(res, 200, { projectPath: workspaces[0] || '', workspaces, tokenBudget: config.tokenBudget, autoInject: config.autoInject !== false });
   }
+  if (req.method === 'POST' && !String(req.headers['content-type'] || '').toLowerCase().startsWith('application/json')) return json(res, 415, { error: 'application/json required' });
   const input = req.method === 'POST' ? await bodyJson(req) : {};
   const requested = req.method === 'GET' ? url.searchParams.get('project') : input.projectPath;
   const projectPath = await allowedWorkspace(ctx, requested);
   if (projectPath === null) return json(res, 403, { error: 'Project is not a registered DeepSeek Harness workspace' });
+  if (url.pathname === `${PREFIX}/api/session-settings`) {
+    const sessionId = String(req.method === 'GET' ? url.searchParams.get('sessionId') || '' : input.sessionId || '');
+    const session = sessionState.get(sessionId);
+    if (!sessionId || !session || !session.projectPath || resolvePath(session.projectPath) !== resolvePath(projectPath)) return json(res, 404, { error: 'DSH session is not active for this workspace' });
+    if (req.method === 'GET') return json(res, 200, resolveSessionContextSettings(session, config));
+    if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' });
+    const patch = {};
+    if (input.autoInject !== undefined) patch.autoInject = input.autoInject;
+    if (input.tokenBudget !== undefined) patch.tokenBudget = input.tokenBudget;
+    if (input.reuseContext !== undefined) patch.reuseContext = input.reuseContext;
+    if (input.maxImplementationFiles !== undefined) patch.maxImplementationFiles = input.maxImplementationFiles;
+    if (input.semanticDepth !== undefined) patch.semanticDepth = input.semanticDepth;
+    if (input.include !== undefined) patch.include = input.include;
+    if (input.exclude !== undefined) patch.exclude = input.exclude;
+    return json(res, 200, updateSessionContextSettings(sessionState, sessionId, patch, config));
+  }
   if (req.method === 'GET' && url.pathname === `${PREFIX}/api/graph`) return json(res, 200, await loadGraph(projectPath));
   if (req.method === 'GET' && url.pathname === `${PREFIX}/api/git`) return json(res, 200, await gitSummary(projectPath));
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' });
-  if (!String(req.headers['content-type'] || '').toLowerCase().startsWith('application/json')) return json(res, 415, { error: 'application/json required' });
   if (url.pathname === `${PREFIX}/api/scan`) {
     const result = reconcileGraphs(await analyzeProject(projectPath), await loadGraph(projectPath));
     await ensureMemory(projectPath, result.graph);
@@ -50,7 +68,7 @@ async function api(ctx, config, req, res, url) {
     await ensureMemory(projectPath, graph);
     return json(res, 200, graph);
   }
-  if (url.pathname === `${PREFIX}/api/compile`) return json(res, 200, await compileContext({ ...input, projectPath, graph: input.graph || await loadGraph(projectPath) }));
+  if (url.pathname === `${PREFIX}/api/compile`) return json(res, 200, await compileContext({ ...input, tokenBudget: input.tokenBudget ?? config.tokenBudget, projectPath, graph: input.graph || await loadGraph(projectPath) }));
   return json(res, 404, { error: 'Not found' });
 }
 

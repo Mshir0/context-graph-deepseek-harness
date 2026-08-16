@@ -1,6 +1,6 @@
 {
   "name": "dsh-context-graph",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Native Context Graph and budget-aware context injection plugin for DeepSeek Harness",
   "type": "module",
   "packageManager": "pnpm@11.7.0",
@@ -32,7 +32,7 @@
   },
   "scripts": {
     "test": "node --test",
-    "check": "node --check src/core.js && node --check src/semantic-functional.js && node --check src/dsh-plugin.js && node --check src/dsh-routes.js && node --check src/dependency-skill.js && node --check src/context-extraction.js && node --check src/client/index.js"
+    "check": "node --check src/core.js && node --check src/semantic-functional.js && node --check src/session-context.js && node --check src/dsh-plugin.js && node --check src/dsh-routes.js && node --check src/dependency-skill.js && node --check src/context-extraction.js && node --check src/client/index.js"
   },
   "engines": {
     "node": "^22.19.0 || >=24.0.0"

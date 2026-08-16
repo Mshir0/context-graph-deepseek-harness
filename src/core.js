@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -232,6 +233,10 @@ export async function ensureMemory(projectPath, graph) {
 
 async function optionalRead(file) { try { return await readFile(file, 'utf8'); } catch (error) { if (error.code === 'ENOENT') return ''; throw error; } }
 function estimateTokens(text) { return Math.ceil([...text].reduce((sum, char) => sum + (char.charCodeAt(0) > 255 ? 1 : 0.25), 0)); }
+function reusableContextFingerprint(items) {
+  const reusable = items.filter(item => item.scope !== 'task').map(item => `${item.label}\0${item.content}`).join('\x1e');
+  return createHash('sha256').update(reusable).digest('hex');
+}
 
 async function git(projectPath, args) {
   try { return (await execFileAsync('git', ['-C', path.resolve(projectPath), ...args], { maxBuffer: 4 * 1024 * 1024 })).stdout.trim(); }
@@ -296,11 +301,13 @@ export async function compileContext(input) {
     else excluded.push({ module: item.module, scope: item.scope, reason: 'token budget', tokens });
   }
   const text = included.map((item) => `## ${item.label}\n\n${item.content}`).join('\n\n');
-  return { target, task, tokenBudget, estimatedTokens: used, overBudget: used > tokenBudget, included: included.map(({ content, ...item }) => item), excluded, context: text };
+  return { target, task, tokenBudget, estimatedTokens: used, overBudget: used > tokenBudget, reusableContextFingerprint: reusableContextFingerprint(included), included: included.map(({ content, ...item }) => item), excluded, context: text };
 }
 
-export async function compileModularContext({ projectPath, graph, entry, task = '', tokenBudget = 16000, include = [], exclude = [] }) {
+export async function compileModularContext({ projectPath, graph, entry, task = '', tokenBudget = 16000, include = [], exclude = [], maxImplementationFiles = 3, semanticDepth = 3 }) {
   const root = path.resolve(projectPath);
+  const implementationLimit = Number.isInteger(maxImplementationFiles) ? Math.max(1, Math.min(5, maxImplementationFiles)) : 3;
+  const semanticLimit = Number.isInteger(semanticDepth) ? Math.max(1, Math.min(3, semanticDepth)) : 3;
   const nodeMap = new Map(graph.nodes.map(node => [node.id, node]));
   if (!nodeMap.has(entry)) throw new Error(`Unknown context entry: ${entry}`);
   const forceInclude = new Set([...(graph.overrides?.include || []), ...include]);
@@ -314,7 +321,7 @@ export async function compileModularContext({ projectPath, graph, entry, task = 
   while (queue.length) {
     const current = queue.shift(); const currentInfo = selected.get(current);
     if (forceExclude.has(current)) continue;
-    if (currentInfo.depth >= 3) continue;
+    if (currentInfo.depth >= semanticLimit) continue;
     for (const edge of graph.edges) {
       if (edge.type === 'derived_from') continue; // Raw messages remain trace-only by default.
       if (['dependency', 'reference', 'calls'].includes(edge.type) && nodeMap.get(current)?.type === 'functional') continue;
@@ -328,7 +335,7 @@ export async function compileModularContext({ projectPath, graph, entry, task = 
   // A Functional Node is the semantic boundary. Resolve only its relevant
   // implementation mapping after semantic traversal; never expand file calls.
   for (const [id] of [...selected]) if (nodeMap.get(id)?.type === 'functional') {
-    for (const implementation of implementationForFunctional(graph, id, task)) {
+    for (const implementation of implementationForFunctional(graph, id, task, implementationLimit)) {
       if (nodeMap.has(implementation.id) && !forceExclude.has(implementation.id) && !selected.has(implementation.id)) {
         selected.set(implementation.id, { depth: 2, reason: `implemented_by ${id}`, scope: ['code', 'interface'] });
       }
@@ -368,7 +375,7 @@ export async function compileModularContext({ projectPath, graph, entry, task = 
     if (used + tokens <= tokenBudget || item.required) { included.push({ ...item, tokens }); used += tokens; }
     else excluded.push({ node: item.node, module: item.module, scope: item.scope, reason: 'token budget', tokens });
   }
-  return { entry, target: entry, task, tokenBudget, estimatedTokens: used, overBudget: used > tokenBudget, included: included.map(({ content, ...item }) => item), excluded, context: included.map(item => `## ${item.label}\n\n${item.content}`).join('\n\n') };
+  return { entry, target: entry, task, tokenBudget, estimatedTokens: used, overBudget: used > tokenBudget, reusableContextFingerprint: reusableContextFingerprint(included), included: included.map(({ content, ...item }) => item), excluded, context: included.map(item => `## ${item.label}\n\n${item.content}`).join('\n\n') };
 }
 
 export async function listProjects(parentPath) {

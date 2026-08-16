@@ -4,7 +4,7 @@
     - id: context-graph
       name: dsh-context-graph
       config:
-        tokenBudget: 16000
+        tokenBudget: 6000
         autoScan: true
         autoInject: true
         webUi: true

@@ -12,6 +12,7 @@ import {
 } from './core.js';
 import { registerContextGraphRoutes } from './dsh-routes.js';
 import { escapeAttribute, inferTarget, latestUserText, preview } from './dsh-context.js';
+import { resolveSessionContextSettings, updateSessionContextSettings } from './session-context.js';
 import { applyExtraction, detectContextConflicts, extractContext } from './context-extraction.js';
 import { applyFunctionalInference, inferFunctionalModules, mergeFunctionalNodes, splitFunctionalNode } from './semantic-functional.js';
 import {
@@ -32,7 +33,7 @@ import {
 export const name = 'context-graph';
 export const inject = ['agents', 'sessions', 'tools', 'systemPrompt'];
 
-const DEFAULTS = { tokenBudget: 16000, autoScan: true, autoInject: true, webUi: true };
+const DEFAULTS = { tokenBudget: 6000, autoScan: true, autoInject: true, webUi: true };
 
 export function apply(ctx, input = {}) {
   const config = resolveConfig(input);
@@ -48,27 +49,26 @@ export function apply(ctx, input = {}) {
 
   ctx.on('agent/session-start', ({ agent }) => {
     const key = String(agent.session.id);
+    sessionState.set(key, { ...(sessionState.get(key) || {}), projectPath: agent.session.header?.cwd || '' });
     agent.ctx.effect(() => () => sessionState.delete(key), 'contextGraph.disposeSession()');
   });
 
-  if (config.autoInject) {
-    ctx.on('agent/pre-step', async ({ agent, signal }, next) => {
-      const decision = await next();
-      if (decision.kind !== 'enter' || signal.aborted) return decision;
-      try {
-        const message = await compileStepMessage(agent, decision.messages, config, sessionState, signal);
-        if (message === null || signal.aborted) return decision;
-        return { kind: 'enter', messages: [...decision.messages, message] };
-      } catch (error) {
-        ctx.logger.warn(`context-graph: automatic context injection skipped: ${String(error)}`);
-        return decision;
-      }
-    }, { prepend: true });
-  }
+  ctx.on('agent/pre-step', async ({ agent, signal }, next) => {
+    const decision = await next();
+    if (decision.kind !== 'enter' || signal.aborted) return decision;
+    try {
+      const message = await compileStepMessage(agent, decision.messages, config, sessionState, signal);
+      if (message === null || signal.aborted) return decision;
+      return { kind: 'enter', messages: [...decision.messages, message] };
+    } catch (error) {
+      ctx.logger.warn(`context-graph: automatic context injection skipped: ${String(error)}`);
+      return decision;
+    }
+  }, { prepend: true });
 
   if (config.webUi) {
     ctx.inject(['webServer', 'workspaceRegistry'], webCtx => {
-      webCtx.effect(() => registerContextGraphRoutes(webCtx, config), 'context-graph: Harness web routes');
+      webCtx.effect(() => registerContextGraphRoutes(webCtx, config, sessionState), 'context-graph: Harness web routes');
     });
   }
 }
@@ -185,9 +185,35 @@ function registerTools(ctx, config, sessionState) {
     async execute(args, exec) {
       const graph = await loadGraph(workspaceOf(exec));
       if (!graph.nodes.some(node => node.id === args.target)) throw new Error(`Unknown target module: ${args.target}`);
-      const selected = { target: args.target, include: args.include || [], exclude: args.exclude || [] };
-      sessionState.set(sessionKey(exec), { ...sessionState.get(sessionKey(exec)), ...selected, fingerprint: undefined });
-      return JSON.stringify(selected, null, 2);
+      const patch = { target: args.target };
+      if (args.include !== undefined) patch.include = args.include;
+      if (args.exclude !== undefined) patch.exclude = args.exclude;
+      return JSON.stringify(updateSessionContextSettings(sessionState, sessionKey(exec), patch, config), null, 2);
+    },
+  }));
+
+  ctx.tools.register(textTool({
+    name: 'context_session_config',
+    description: 'Configure automatic Context Graph injection only for the current DSH session. This does not modify the project graph or source code.',
+    parameters: {
+      auto_inject: { type: 'boolean', description: 'Enable or disable automatic context injection for this session.' },
+      token_budget: { type: 'integer', description: 'Per-injection token budget, at least 1000.' },
+      reuse_context: { type: 'boolean', description: 'Reuse unchanged compiled context across consecutive tasks in the same target.' },
+      max_implementation_files: { type: 'integer', description: 'Limit mapped implementation files included for each Functional Node, from 1 to 5.' },
+      semantic_depth: { type: 'integer', description: 'Limit semantic graph traversal depth, from 1 to 3.' },
+      include: { type: 'array', items: { type: 'string' }, description: 'Temporary force-included node ids for this session.' },
+      exclude: { type: 'array', items: { type: 'string' }, description: 'Temporary force-excluded node ids for this session.' },
+    },
+    async execute(args, exec) {
+      const patch = {};
+      if (args.auto_inject !== undefined) patch.autoInject = args.auto_inject;
+      if (args.token_budget !== undefined) patch.tokenBudget = args.token_budget;
+      if (args.reuse_context !== undefined) patch.reuseContext = args.reuse_context;
+      if (args.max_implementation_files !== undefined) patch.maxImplementationFiles = args.max_implementation_files;
+      if (args.semantic_depth !== undefined) patch.semanticDepth = args.semantic_depth;
+      if (args.include !== undefined) patch.include = args.include;
+      if (args.exclude !== undefined) patch.exclude = args.exclude;
+      return JSON.stringify(updateSessionContextSettings(sessionState, sessionKey(exec), patch, config), null, 2);
     },
   }));
 
@@ -199,6 +225,8 @@ function registerTools(ctx, config, sessionState) {
       target: { type: 'string', description: 'Backward-compatible target module id.' },
       task: { type: 'string', required: true, description: 'Current coding task.' },
       token_budget: { type: 'integer', description: 'Override the plugin token budget for this preview.' },
+      max_implementation_files: { type: 'integer', description: 'Override the mapped implementation file limit for this preview.' },
+      semantic_depth: { type: 'integer', description: 'Override semantic traversal depth for this preview.' },
       include: { type: 'array', items: { type: 'string' }, description: 'Additional force-included modules.' },
       exclude: { type: 'array', items: { type: 'string' }, description: 'Force-excluded modules.' },
       include_content: { type: 'boolean', description: 'Include the compiled context text in the result.' },
@@ -206,7 +234,8 @@ function registerTools(ctx, config, sessionState) {
     async execute(args, exec) {
       const root = workspaceOf(exec);
       const entry = args.entry || args.target; if (!entry) throw new Error('context_compile requires entry or target');
-      const result = await compileContext({ projectPath: root, graph: await loadGraph(root), entry, target: args.target || entry, task: args.task, tokenBudget: args.token_budget || config.tokenBudget, include: args.include || [], exclude: args.exclude || [] });
+      const selected = resolveSessionContextSettings(sessionState.get(sessionKey(exec)), config);
+      const result = await compileContext({ projectPath: root, graph: await loadGraph(root), entry, target: args.target || entry, task: args.task, tokenBudget: args.token_budget ?? selected.tokenBudget, maxImplementationFiles: args.max_implementation_files ?? selected.maxImplementationFiles, semanticDepth: args.semantic_depth ?? selected.semanticDepth, include: args.include ?? selected.include, exclude: args.exclude ?? selected.exclude });
       return JSON.stringify(preview(result, args.include_content === true), null, 2);
     },
   }));
@@ -272,6 +301,9 @@ function textTool(definition) {
 
 async function compileStepMessage(agent, messages, config, sessionState, signal) {
   const root = agent.session.header?.cwd || process.cwd();
+  const key = String(agent.session.id);
+  const selected = resolveSessionContextSettings(sessionState.get(key), config);
+  if (!selected.autoInject) return null;
   let graph = await loadGraph(root);
   if (graph.nodes.length === 0 && config.autoScan) {
     const result = reconcileGraphs(await analyzeProject(root), graph);
@@ -282,14 +314,17 @@ async function compileStepMessage(agent, messages, config, sessionState, signal)
   if (signal.aborted || graph.nodes.length === 0) return null;
   const task = latestUserText(messages);
   if (task.length === 0) return null;
-  const key = String(agent.session.id);
-  const selected = sessionState.get(key) || {};
   const target = selected.target && graph.nodes.some(node => node.id === selected.target) ? selected.target : inferTarget(task, graph.nodes);
   if (target === null) return null;
-  const result = await compileContext({ projectPath: root, graph, entry: target, target, task, tokenBudget: config.tokenBudget, include: selected.include || [], exclude: selected.exclude || [] });
+  const result = await compileContext({ projectPath: root, graph, entry: target, target, task, tokenBudget: selected.tokenBudget, maxImplementationFiles: selected.maxImplementationFiles, semanticDepth: selected.semanticDepth, include: selected.include, exclude: selected.exclude });
   const fingerprint = createHash('sha256').update(`${task}\0${target}\0${result.context}`).digest('hex');
-  if (selected.fingerprint === fingerprint) return null;
-  sessionState.set(key, { ...selected, target, fingerprint });
+  const reusableFingerprint = `${target}\0${result.reusableContextFingerprint}`;
+  if (sessionState.get(key)?.fingerprint === fingerprint) return null;
+  if (selected.reuseContext && sessionState.get(key)?.reusableFingerprint === reusableFingerprint) {
+    sessionState.set(key, { ...sessionState.get(key), target, fingerprint, reusableFingerprint });
+    return null;
+  }
+  sessionState.set(key, { ...sessionState.get(key), target, fingerprint, reusableFingerprint });
   return createUserMessage({
     content: [{ type: 'text', text: `<context-graph target="${escapeAttribute(target)}" estimated-tokens="${result.estimatedTokens}">\n${result.context}\n</context-graph>` }],
     source: { kind: 'plugin', plugin: 'context-graph', form: 'recall' },

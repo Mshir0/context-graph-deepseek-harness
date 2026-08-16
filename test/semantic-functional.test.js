@@ -96,3 +96,25 @@ test('compiler combines multiple mapping records for one functional node', async
   const result = await compileContext({ projectPath: root, graph, entry: 'function.asr', task: 'change timestamp', tokenBudget: 2000 });
   assert.ok(result.included.some(item => item.node === 'timestamp' && item.scope === 'code'));
 });
+
+test('compiler limits mapped files and semantic traversal for a compact session', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'semantic-limits-'));
+  await writeFile(path.join(root, 'one.py'), 'def one(): pass');
+  await writeFile(path.join(root, 'two.py'), 'def two(): pass');
+  await writeFile(path.join(root, 'three.py'), 'def three(): pass');
+  const graph = normalizeGraph({ ...emptyGraph(root), nodes: [
+    { id: 'task', type: 'task', content: 'Adjust capability' },
+    { id: 'function.capability', type: 'functional', title: 'Capability', description: 'A compact capability.' },
+    { id: 'requirement', type: 'requirement', content: 'Only relevant at depth two.' },
+    { id: 'one', type: 'code_module', path: 'one.py' },
+    { id: 'two', type: 'code_module', path: 'two.py' },
+    { id: 'three', type: 'code_module', path: 'three.py' },
+  ], edges: [
+    { source: 'task', target: 'function.capability', type: 'targets', scope: ['context'] },
+    { source: 'function.capability', target: 'requirement', type: 'affects', scope: ['content'] },
+  ], mappings: [{ functional: 'function.capability', implementation: [{ id: 'one', path: 'one.py' }, { id: 'two', path: 'two.py' }, { id: 'three', path: 'three.py' }] }] }, root);
+  const result = await compileContext({ projectPath: root, graph, entry: 'task', task: 'Adjust capability', tokenBudget: 3000, maxImplementationFiles: 1, semanticDepth: 1 });
+  const code = result.included.filter(item => item.scope === 'code').map(item => item.node);
+  assert.equal(code.length, 1);
+  assert.ok(!result.included.some(item => item.node === 'requirement'));
+});

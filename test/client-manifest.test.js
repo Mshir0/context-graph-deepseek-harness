@@ -30,6 +30,9 @@ test('client adds a conversation view tab and sends through scoped conversation'
   assert.match(source, /id: 'context-graph'/);
   assert.match(source, /name: 'conversation\.input\.left'/);
   assert.match(source, /function ContextCommand/);
+  assert.match(source, /session-settings/);
+  assert.match(source, /自动注入当前会话/);
+  assert.match(source, /复用未变化的上下文/);
   assert.match(source, /document\.addEventListener\('pointerdown', dismiss, true\)/);
   assert.match(source, /event\.key === 'Escape'/);
   assert.match(source, /function Inspector[\s\S]*window\.addEventListener\('pointermove'/);
@@ -39,6 +42,7 @@ test('client adds a conversation view tab and sends through scoped conversation'
   assert.match(source, /DOUBLE_PRESS_MS/);
   assert.match(source, /const NODE_TYPES/);
   assert.match(source, /Context Preview/);
+  assert.match(source, /本会话排除/);
   assert.match(source, /viewMode.*semantic/);
   assert.match(source, /functionalProposal/);
   assert.match(source, /functional-infer/);
