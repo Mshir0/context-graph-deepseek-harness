@@ -22,6 +22,25 @@ test('reconciles missing and stale code/context edges', () => {
   assert.ok(result.suggestions.some((item) => item.kind === 'stale' && item.target === 'c'));
 });
 
+test('places newly scanned modules in free graph positions without moving existing nodes', () => {
+  const graph = emptyGraph('/tmp/project');
+  graph.nodes = [{ id: 'existing', path: 'existing.c', x: 80, y: 80 }];
+  const result = reconcileGraphs({ modules: [{ id: 'existing', path: 'existing.c', imports: [] }, { id: 'new-file', path: 'new-file.c', imports: [] }] }, graph);
+  const existing = result.graph.nodes.find(node => node.id === 'existing');
+  const added = result.graph.nodes.find(node => node.id === 'new-file');
+  assert.deepEqual({ x: existing.x, y: existing.y }, { x: 80, y: 80 });
+  assert.ok(Math.abs(added.x - existing.x) >= 220 || Math.abs(added.y - existing.y) >= 140);
+});
+
+test('repairs overlapping positions retained from an earlier scan', () => {
+  const graph = emptyGraph('/tmp/project');
+  graph.nodes = [{ id: 'first', x: 80, y: 80 }, { id: 'second', x: 80, y: 80 }];
+  const result = reconcileGraphs({ modules: [{ id: 'first', imports: [] }, { id: 'second', imports: [] }] }, graph);
+  const [first, second] = result.graph.nodes;
+  assert.deepEqual({ x: first.x, y: first.y }, { x: 80, y: 80 });
+  assert.ok(Math.abs(second.x - first.x) >= 220 || Math.abs(second.y - first.y) >= 140);
+});
+
 test('scans C source files and resolves quoted includes to project modules', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'context-graph-c-'));
   await writeFile(path.join(root, 'hello.c'), '#include "helper.h"\nint main(void) { return helper(); }\n');

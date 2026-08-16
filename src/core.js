@@ -104,14 +104,34 @@ function importTarget(importName, moduleIds) {
   return [...moduleIds].sort((a, b) => b.length - a.length).find((id) => normalized === id || normalized.startsWith(`${id}.`) || id.endsWith(`.${normalized}`));
 }
 
+function positionsOverlap(left, right) {
+  return Number.isFinite(left.x) && Number.isFinite(left.y) && Number.isFinite(right.x) && Number.isFinite(right.y)
+    && Math.abs(left.x - right.x) < 220 && Math.abs(left.y - right.y) < 140;
+}
+
+function nextNodePosition(nodes) {
+  // Match the editor's card footprint with a little clearance.
+  for (let index = 0; index < 10_000; index += 1) {
+    const candidate = { x: 80 + (index % 4) * 260, y: 80 + Math.floor(index / 4) * 180 };
+    if (nodes.every(node => !positionsOverlap(candidate, node))) return candidate;
+  }
+  // The guard is unreachable for normal projects, but keeps reconciliation total.
+  return { x: 80, y: 80 + nodes.length * 180 };
+}
+
 export function reconcileGraphs(codeGraph, contextGraph) {
   const graph = structuredClone(contextGraph);
+  const positioned = [];
+  for (const node of graph.nodes) {
+    if (!Number.isFinite(node.x) || !Number.isFinite(node.y) || positioned.some(previous => positionsOverlap(node, previous))) {
+      Object.assign(node, nextNodePosition(positioned));
+    }
+    positioned.push(node);
+  }
   const existing = new Set(graph.nodes.map((node) => node.id));
-  let column = 0;
   for (const module of codeGraph.modules) {
     if (!existing.has(module.id)) {
-      graph.nodes.push({ id: module.id, label: module.id, path: module.path, mode: 'AUTO', x: 80 + (column % 4) * 260, y: 80 + Math.floor(column / 4) * 180 });
-      column += 1;
+      graph.nodes.push({ id: module.id, label: module.id, path: module.path, mode: 'AUTO', ...nextNodePosition(graph.nodes) });
     }
   }
   const ids = new Set(codeGraph.modules.map((module) => module.id));
