@@ -31,5 +31,6 @@ test('client replaces the details slot and sends through scoped conversation', a
   assert.match(source, /priority: -100/);
   assert.match(source, /sessions\.scope\(sessionId\)/);
   assert.match(source, /conversation\.send\(text\)/);
+  assert.match(source, /onDoubleClick: event =>[\s\S]*setInspected\(\{ kind: 'node'/);
   assert.doesNotMatch(source, /\/context-graph\/index\.html/);
 });

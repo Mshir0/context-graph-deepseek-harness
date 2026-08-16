@@ -112,6 +112,7 @@ function Inspector({ graph, selected, updateNode, updateEdge, remove }) {
 function GraphPanel({ sessionId, projectPath, sendPrompt }) {
   const [graph, setGraph] = useState(null);
   const [selected, setSelected] = useState(null);
+  const [inspected, setInspected] = useState(null);
   const [view, setView] = useState({ x: 0, y: 0, zoom: 1 });
   const [gesture, setGesture] = useState(null);
   const [status, setStatus] = useState('正在载入…');
@@ -130,7 +131,7 @@ function GraphPanel({ sessionId, projectPath, sendPrompt }) {
     try {
       announce('正在载入…');
       const next = await request(`/graph?project=${encodeURIComponent(projectPath)}`);
-      setGraph(next); setSelected(null); announce(`${next.nodes.length} 个模块`);
+      setGraph(next); setSelected(null); setInspected(null); announce(`${next.nodes.length} 个模块`);
       requestAnimationFrame(() => { const svg = svgRef.current; if (svg) setView(fitView(next, svg.clientWidth, svg.clientHeight)); });
     } catch (cause) { announce(cause.message, true); }
   }, [announce, projectPath]);
@@ -143,7 +144,7 @@ function GraphPanel({ sessionId, projectPath, sendPrompt }) {
   }, [announce, projectPath]);
   const scan = useCallback(async () => {
     if (!projectPath) return;
-    try { announce('正在扫描代码…'); const result = await request('/scan', { method: 'POST', body: JSON.stringify({ projectPath }) }); setGraph(result.graph); announce(`扫描完成：${result.graph.nodes.length} 个模块，${result.suggestions.length} 条建议`); }
+    try { announce('正在扫描代码…'); const result = await request('/scan', { method: 'POST', body: JSON.stringify({ projectPath }) }); setGraph(result.graph); setSelected(null); setInspected(null); announce(`扫描完成：${result.graph.nodes.length} 个模块，${result.suggestions.length} 条建议`); }
     catch (cause) { announce(cause.message, true); }
   }, [announce, projectPath]);
   const fit = useCallback(() => { const svg = svgRef.current; if (svg && graphRef.current) setView(fitView(graphRef.current, svg.clientWidth, svg.clientHeight)); }, []);
@@ -153,7 +154,7 @@ function GraphPanel({ sessionId, projectPath, sendPrompt }) {
     setGraph(previous => current.kind === 'node'
       ? { ...previous, nodes: previous.nodes.filter(node => node.id !== current.id), edges: previous.edges.filter(edge => edge.source !== current.id && edge.target !== current.id) }
       : { ...previous, edges: previous.edges.filter((_edge, index) => index !== current.index) });
-    setSelected(null); announce('已删除，保存后生效');
+    setSelected(null); setInspected(null); announce('已删除，保存后生效');
   }, [announce]);
   const submit = useCallback(async () => {
     const text = task.trim(); if (!text || sending) return;
@@ -173,17 +174,17 @@ function GraphPanel({ sessionId, projectPath, sendPrompt }) {
       else if (!editing && (event.key === 'Delete' || event.key === 'Backspace')) { event.preventDefault(); remove(); }
       else if (!editing && event.key.toLowerCase() === 'f') fit();
       else if (!editing && event.key.toLowerCase() === 'a') layout();
-      else if (event.key === 'Escape') { setGesture(null); setSelected(null); setHelp(false); }
+      else if (event.key === 'Escape') { setGesture(null); setSelected(null); setInspected(null); setHelp(false); }
     };
     window.addEventListener('keydown', keydown);
     return () => window.removeEventListener('keydown', keydown);
   }, [fit, layout, remove, save, submit]);
 
   const nodes = useMemo(() => new Map((graph?.nodes || []).map(node => [node.id, node])), [graph]);
-  const updateNode = patch => setGraph(previous => ({ ...previous, nodes: previous.nodes.map(node => node.id === selected.id ? { ...node, ...patch } : node) }));
-  const updateEdge = patch => setGraph(previous => ({ ...previous, edges: previous.edges.map((edge, index) => index === selected.index ? { ...edge, ...patch } : edge) }));
+  const updateNode = patch => setGraph(previous => ({ ...previous, nodes: previous.nodes.map(node => node.id === inspected.id ? { ...node, ...patch } : node) }));
+  const updateEdge = patch => setGraph(previous => ({ ...previous, edges: previous.edges.map((edge, index) => index === inspected.index ? { ...edge, ...patch } : edge) }));
   const point = event => graphPoint(svgRef.current, view, event.clientX, event.clientY);
-  const startPan = event => { if (event.button !== 0) return; event.currentTarget.setPointerCapture(event.pointerId); setSelected(null); setGesture({ kind: 'pan', startX: event.clientX, startY: event.clientY, x: view.x, y: view.y }); };
+  const startPan = event => { if (event.button !== 0) return; event.currentTarget.setPointerCapture(event.pointerId); setSelected(null); setInspected(null); setGesture({ kind: 'pan', startX: event.clientX, startY: event.clientY, x: view.x, y: view.y }); };
   const move = event => {
     if (!gesture) return;
     if (gesture.kind === 'pan') setView(current => ({ ...current, x: gesture.x + event.clientX - gesture.startX, y: gesture.y + event.clientY - gesture.startY }));
@@ -209,22 +210,23 @@ function GraphPanel({ sessionId, projectPath, sendPrompt }) {
         onWheel: event => { event.preventDefault(); const before = point(event); const zoom = Math.min(2, Math.max(.25, view.zoom * (event.deltaY > 0 ? .9 : 1.1))); const rect = svgRef.current.getBoundingClientRect(); setView({ zoom, x: event.clientX - rect.left - before.x * zoom, y: event.clientY - rect.top - before.y * zoom }); } },
         h('defs', null, h('marker', { id: 'cg-arrow', markerWidth: 8, markerHeight: 8, refX: 7, refY: 4, orient: 'auto' }, h('path', { d: 'M0,0 L8,4 L0,8 Z', fill: 'context-stroke' }))),
         h('g', { transform: `translate(${view.x} ${view.y}) scale(${view.zoom})` },
-          (graph?.edges || []).map((edge, index) => { const source = nodes.get(edge.source); const target = nodes.get(edge.target); if (!source || !target) return null; const d = edgePath(source, target); return h('g', { key: `${edge.source}-${edge.target}-${index}`, onPointerDown: event => { event.stopPropagation(); setSelected({ kind: 'edge', index }); } }, h('path', { d, className: 'cg-edge-hit' }), h('path', { d, className: 'cg-edge', 'data-type': edge.type, 'data-selected': selected?.kind === 'edge' && selected.index === index, markerEnd: 'url(#cg-arrow)' })); }),
+          (graph?.edges || []).map((edge, index) => { const source = nodes.get(edge.source); const target = nodes.get(edge.target); if (!source || !target) return null; const d = edgePath(source, target); return h('g', { key: `${edge.source}-${edge.target}-${index}`, onPointerDown: event => { event.stopPropagation(); setSelected({ kind: 'edge', index }); setInspected(null); }, onDoubleClick: event => { event.stopPropagation(); setSelected({ kind: 'edge', index }); setInspected({ kind: 'edge', index }); } }, h('path', { d, className: 'cg-edge-hit' }), h('path', { d, className: 'cg-edge', 'data-type': edge.type, 'data-selected': selected?.kind === 'edge' && selected.index === index, markerEnd: 'url(#cg-arrow)' })); }),
           gesture?.kind === 'connect' && nodes.get(gesture.source) ? h('path', { className: 'cg-temp', d: edgePath(nodes.get(gesture.source), { x: gesture.point.x, y: gesture.point.y - NODE_H / 2 }) }) : null,
           (graph?.nodes || []).map(node => h('g', { key: node.id, className: 'cg-node', transform: `translate(${node.x || 0} ${node.y || 0})`, 'data-selected': selected?.kind === 'node' && selected.id === node.id, 'data-mode': node.mode || 'AUTO',
-            onPointerDown: event => { event.stopPropagation(); const p = point(event); svgRef.current.setPointerCapture(event.pointerId); setSelected({ kind: 'node', id: node.id }); setGesture({ kind: 'node', id: node.id, dx: p.x - (node.x || 0), dy: p.y - (node.y || 0) }); } },
+            onPointerDown: event => { event.stopPropagation(); const p = point(event); svgRef.current.setPointerCapture(event.pointerId); setSelected({ kind: 'node', id: node.id }); setInspected(null); setGesture({ kind: 'node', id: node.id, dx: p.x - (node.x || 0), dy: p.y - (node.y || 0) }); },
+            onDoubleClick: event => { event.stopPropagation(); setSelected({ kind: 'node', id: node.id }); setInspected({ kind: 'node', id: node.id }); } },
             h('rect', { className: 'cg-node-box', width: NODE_W, height: NODE_H, rx: 5 }),
             h('path', { className: 'cg-node-head', d: `M5 0 H${NODE_W - 5} Q${NODE_W} 0 ${NODE_W} 5 V28 H0 V5 Q0 0 5 0` }),
             h('text', { className: 'cg-node-title', x: 11, y: 19 }, (node.label || node.id).slice(0, 25)),
             h('text', { className: 'cg-node-meta', x: 11, y: 48 }, (node.path || '未设置路径').slice(0, 29)),
             h('text', { className: 'cg-node-meta', x: 11, y: 69 }, node.mode || 'AUTO'),
             h('circle', { className: 'cg-port', cx: 0, cy: NODE_H / 2, r: 6, onPointerDown: event => event.stopPropagation(), onPointerUp: event => { event.stopPropagation(); connect(node.id); } }),
-            h('circle', { className: 'cg-port', cx: NODE_W, cy: NODE_H / 2, r: 6, onPointerDown: event => { event.stopPropagation(); setSelected({ kind: 'node', id: node.id }); setGesture({ kind: 'connect', source: node.id, point: point(event) }); } }))),
+            h('circle', { className: 'cg-port', cx: NODE_W, cy: NODE_H / 2, r: 6, onPointerDown: event => { event.stopPropagation(); setSelected({ kind: 'node', id: node.id }); setInspected(null); setGesture({ kind: 'connect', source: node.id, point: point(event) }); } }))),
         )),
       h('div', { className: 'cg-tools' }, h(IconButton, { label: '放大', onClick: () => setView(current => ({ ...current, zoom: Math.min(2, current.zoom * 1.15) })) }, '+'), h(IconButton, { label: '缩小', onClick: () => setView(current => ({ ...current, zoom: Math.max(.25, current.zoom / 1.15) })) }, '−'), h(IconButton, { label: '适合画布 (F)', onClick: fit }, '□'), h(IconButton, { label: '自动排布 (A)', onClick: layout }, '≡')),
       !graph?.nodes.length ? h('div', { className: 'cg-empty' }, h('strong', null, '暂无模块'), h('span', null, '点击扫描代码生成图谱')) : null,
       h('div', { className: 'cg-status', 'data-error': error }, status),
-      h(Inspector, { graph: graph || { nodes: [], edges: [] }, selected, updateNode, updateEdge, remove }),
+      h(Inspector, { graph: graph || { nodes: [], edges: [] }, selected: inspected, updateNode, updateEdge, remove }),
       help ? h('section', { className: 'cg-help' }, h('h3', null, '快捷键'), h('dl', null,
         h('dt', null, 'Ctrl/⌘ + S'), h('dd', null, '保存图谱'), h('dt', null, 'Ctrl/⌘ + Enter'), h('dd', null, '发送任务'), h('dt', null, 'Delete'), h('dd', null, '删除所选节点或连接'), h('dt', null, 'F'), h('dd', null, '适合画布'), h('dt', null, 'A'), h('dd', null, '自动排布'), h('dt', null, 'Esc'), h('dd', null, '取消连接或选择'), h('dt', null, '拖动端口'), h('dd', null, '手动创建连接'))) : null),
     h('footer', { className: 'cg-compose' },
