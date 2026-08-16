@@ -30,6 +30,10 @@ test('client adds a conversation view tab and sends through scoped conversation'
   assert.match(source, /id: 'context-graph'/);
   assert.match(source, /name: 'conversation\.input\.left'/);
   assert.match(source, /function ContextCommand/);
+  assert.match(source, /创建任务并发送/);
+  assert.match(source, /添加到输入框/);
+  assert.match(source, /request\('\/tasks'/);
+  assert.match(source, /targetStore\.set\(sessionId, created\.task\.id\)/);
   assert.match(source, /session-settings/);
   assert.match(source, /自动注入当前会话/);
   assert.match(source, /复用未变化的上下文/);
@@ -41,6 +45,8 @@ test('client adds a conversation view tab and sends through scoped conversation'
   assert.match(source, /const selectItem = item =>/);
   assert.match(source, /DOUBLE_PRESS_MS/);
   assert.match(source, /const NODE_TYPES/);
+  assert.match(source, /const CREATE_NODE_TYPES/);
+  assert.match(source, /新建节点类型/);
   assert.match(source, /Context Preview/);
   assert.match(source, /本会话排除/);
   assert.match(source, /viewMode.*semantic/);

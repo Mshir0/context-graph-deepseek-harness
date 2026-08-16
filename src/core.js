@@ -93,6 +93,21 @@ export async function saveGraph(projectPath, graph) {
   return clean;
 }
 
+export function createTaskNode(graph, { content, title = '', taskType = 'develop', target = null } = {}) {
+  const text = String(content || '').trim();
+  if (!text) throw new Error('Task content is required');
+  const next = structuredClone(graph);
+  const ids = new Set(next.nodes.map(node => node.id));
+  const baseId = `task-${Date.now().toString(36)}`;
+  let id = baseId; let suffix = 2;
+  while (ids.has(id)) { id = `${baseId}-${suffix}`; suffix += 1; }
+  const label = String(title || text.split(/\r?\n/)[0]).replace(/\s+/g, ' ').slice(0, 72) || '新建任务';
+  const node = { id, type: 'task', title: label, label, content: text, description: text, source: 'user', priority: 'normal', status: 'active', mode: 'MANUAL', metadata: { layer: 'structured', taskType, createdVia: 'conversation' }, ...nextNodePosition(next.nodes) };
+  next.nodes.push(node);
+  if (target) next.edges.push({ source: id, target, type: 'targets', scope: ['code', 'context'], mode: 'MANUAL' });
+  return { graph: next, task: node };
+}
+
 function edgeKey(source, target) { return `${source}\0${target}`; }
 
 export async function analyzeProject(projectPath) {
@@ -233,6 +248,11 @@ export async function ensureMemory(projectPath, graph) {
 
 async function optionalRead(file) { try { return await readFile(file, 'utf8'); } catch (error) { if (error.code === 'ENOENT') return ''; throw error; } }
 function estimateTokens(text) { return Math.ceil([...text].reduce((sum, char) => sum + (char.charCodeAt(0) > 255 ? 1 : 0.25), 0)); }
+function taskTextIncludes(task, content) {
+  const request = String(task || '').trim().replace(/\s+/g, ' ');
+  const saved = String(content || '').trim().replace(/\s+/g, ' ');
+  return request.length > 0 && saved.length > 0 && request.includes(saved);
+}
 function reusableContextFingerprint(items) {
   const reusable = items.filter(item => item.scope !== 'task').map(item => `${item.label}\0${item.content}`).join('\x1e');
   return createHash('sha256').update(reusable).digest('hex');
@@ -324,9 +344,13 @@ export async function compileModularContext({ projectPath, graph, entry, task = 
     if (currentInfo.depth >= semanticLimit) continue;
     for (const edge of graph.edges) {
       if (edge.type === 'derived_from') continue; // Raw messages remain trace-only by default.
+      const forward = edge.source === current;
+      if (edge.type === 'targets' && !forward) continue;
       if (['dependency', 'reference', 'calls'].includes(edge.type) && nodeMap.get(current)?.type === 'functional') continue;
-      const next = edge.source === current ? edge.target : edge.target === current ? edge.source : null;
+      const next = forward ? edge.target : edge.target === current ? edge.source : null;
       if (!next || !nodeMap.has(next) || forceExclude.has(next)) continue;
+      // Tasks are entry points. Do not pull old tasks back in through a shared target.
+      if (nodeMap.get(next)?.type === 'task' && next !== entry) continue;
       if (nodeMap.get(current)?.type === 'functional' && (nodeMap.get(next)?.type === 'code_module' || nodeMap.get(next)?.type?.startsWith('implementation_'))) continue;
       if (edge.mode === 'FORCE_EXCLUDE' || edge.type === 'force_exclude') { forceExclude.add(next); continue; }
       if (!selected.has(next)) { selected.set(next, { depth: currentInfo.depth + 1, reason: `${edge.type} ${edge.source === current ? 'from' : 'to'} ${current}`, scope: edge.scope || [] }); queue.push(next); }
@@ -354,7 +378,8 @@ export async function compileModularContext({ projectPath, graph, entry, task = 
     if (node.status !== 'active' && id !== entry) { excluded.push({ node: id, module: id, reason: node.status }); continue; }
     if (node.type === 'conversation' || node.metadata?.raw === true) { excluded.push({ node: id, module: id, reason: 'raw source is trace-only' }); continue; }
     const priority = node.priority === 'critical' ? 940 : node.priority === 'high' ? 900 : selection.depth === 0 ? 880 : 680 - selection.depth * 40;
-    if (node.content && node.type !== 'functional') add(priority, `${node.title} (${node.type})`, node.content, node, 'content', selection.reason, id === entry && node.type !== 'code_module');
+    const duplicatedCurrentTask = id === entry && node.type === 'task' && taskTextIncludes(task, node.content);
+    if (node.content && node.type !== 'functional' && !duplicatedCurrentTask) add(priority, `${node.title} (${node.type})`, node.content, node, 'content', selection.reason, id === entry && node.type !== 'code_module');
     if (node.type === 'functional') {
       const detail = [node.description || node.content, node.provides?.length ? `Provides: ${node.provides.join(', ')}` : '', node.consumes?.length ? `Consumes: ${node.consumes.join(', ')}` : '', node.inputs?.length ? `Input: ${node.inputs.join(', ')}` : '', node.outputs?.length ? `Output: ${node.outputs.join(', ')}` : ''].filter(Boolean).join('\n');
       if (detail) add(priority, `${node.title} (functional)`, detail, node, 'content', selection.reason, id === entry);

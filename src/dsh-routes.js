@@ -1,7 +1,8 @@
 import { realpath } from 'node:fs/promises';
 import { resolve as resolvePath } from 'node:path';
-import { analyzeProject, compileContext, ensureMemory, gitSummary, loadGraph, reconcileGraphs, saveGraph } from './core.js';
+import { analyzeProject, compileContext, createTaskNode, ensureMemory, gitSummary, loadGraph, reconcileGraphs, saveGraph } from './core.js';
 import { analyzeDependencies } from './dependency-skill.js';
+import { inferTarget } from './dsh-context.js';
 import { applyFunctionalInference, inferFunctionalModules } from './semantic-functional.js';
 import { resolveSessionContextSettings, updateSessionContextSettings } from './session-context.js';
 
@@ -52,6 +53,33 @@ async function api(ctx, config, sessionState, req, res, url) {
   if (req.method === 'GET' && url.pathname === `${PREFIX}/api/graph`) return json(res, 200, await loadGraph(projectPath));
   if (req.method === 'GET' && url.pathname === `${PREFIX}/api/git`) return json(res, 200, await gitSummary(projectPath));
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' });
+  if (url.pathname === `${PREFIX}/api/tasks`) {
+    const content = typeof input.content === 'string' ? input.content.trim() : '';
+    if (!content) return json(res, 400, { error: 'Task content is required' });
+    if (input.target !== undefined && input.target !== null && typeof input.target !== 'string') return json(res, 400, { error: 'Task target must be a node id' });
+    const requestedTarget = typeof input.target === 'string' ? input.target.trim() : '';
+    if (typeof input.target === 'string' && input.target && !requestedTarget) return json(res, 400, { error: 'Task target must be a node id' });
+    if (input.sessionId !== undefined && input.sessionId !== null && (typeof input.sessionId !== 'string' || !input.sessionId.trim())) return json(res, 400, { error: 'DSH session id must be a non-empty string' });
+    const sessionId = typeof input.sessionId === 'string' ? input.sessionId.trim() : '';
+    const session = sessionId ? sessionState.get(sessionId) : null;
+    if (sessionId && (!session || !session.projectPath || resolvePath(session.projectPath) !== resolvePath(projectPath))) return json(res, 404, { error: 'DSH session is not active for this workspace' });
+
+    const graph = await loadGraph(projectPath);
+    let target = requestedTarget || null;
+    if (target && !graph.nodes.some(node => node.id === target)) return json(res, 400, { error: `Unknown task target: ${target}` });
+    if (!target) target = inferTaskTarget(content, graph.nodes);
+    const created = createTaskNode(graph, {
+      content,
+      title: typeof input.title === 'string' ? input.title : '',
+      taskType: typeof input.taskType === 'string' && input.taskType.trim() ? input.taskType.trim() : 'develop',
+      target,
+    });
+    const saved = await saveGraph(projectPath, created.graph);
+    await ensureMemory(projectPath, saved);
+    const task = saved.nodes.find(node => node.id === created.task.id);
+    const sessionSettings = sessionId ? updateSessionContextSettings(sessionState, sessionId, { target: task.id }, config) : null;
+    return json(res, 200, { graph: saved, task, target, sessionSettings });
+  }
   if (url.pathname === `${PREFIX}/api/scan`) {
     const result = reconcileGraphs(await analyzeProject(projectPath), await loadGraph(projectPath));
     await ensureMemory(projectPath, result.graph);
@@ -70,6 +98,16 @@ async function api(ctx, config, sessionState, req, res, url) {
   }
   if (url.pathname === `${PREFIX}/api/compile`) return json(res, 200, await compileContext({ ...input, tokenBudget: input.tokenBudget ?? config.tokenBudget, projectPath, graph: input.graph || await loadGraph(projectPath) }));
   return json(res, 404, { error: 'Not found' });
+}
+
+function inferTaskTarget(content, nodes) {
+  const functional = nodes.filter(node => node.type === 'functional');
+  const functionalTarget = inferTarget(content, functional);
+  if (functionalTarget) return functionalTarget;
+  const implementation = nodes.filter(node => node.type === 'code_module' || node.type?.startsWith('implementation_'));
+  const implementationTarget = inferTarget(content, implementation);
+  if (implementationTarget) return implementationTarget;
+  return inferTarget(content, nodes.filter(node => node.type !== 'conversation' && node.metadata?.raw !== true && node.type !== 'task'));
 }
 
 async function allowedWorkspace(ctx, requested) {

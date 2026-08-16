@@ -10,6 +10,10 @@ const styles = String.raw`
 body[data-ds-dark-theme] .cg-root{--cg-line:#34343a;--cg-muted:#a1a1aa;--cg-text:#f4f4f5;--cg-bg:#18181b;--cg-soft:#27272a}body[data-ds-dark-theme] .cg-canvas-wrap{background-color:#1c1c1f;background-image:radial-gradient(#3f3f46 1px,transparent 1px)}body[data-ds-dark-theme] .cg-node-box,body[data-ds-dark-theme] .cg-form input,body[data-ds-dark-theme] .cg-form select,body[data-ds-dark-theme] .cg-compose textarea,body[data-ds-dark-theme] .cg-compose select{fill:#202023;background:#202023;color:#f4f4f5;border-color:#3f3f46}body[data-ds-dark-theme] .cg-node-head{fill:#2b2b30}body[data-ds-dark-theme] .cg-node-title{fill:#f4f4f5}body[data-ds-dark-theme] .cg-node-meta{fill:#a1a1aa}body[data-ds-dark-theme] .cg-tools,body[data-ds-dark-theme] .cg-status,body[data-ds-dark-theme] .cg-inspector,body[data-ds-dark-theme] .cg-help{background:#202023eb;border-color:#3f3f46}body[data-ds-dark-theme] .cg-icon{color:#d4d4d8}body[data-ds-dark-theme] .cg-context-button{color:#d4d4d8}body[data-ds-dark-theme] .cg-context-button:hover,body[data-ds-dark-theme] .cg-context-button[aria-expanded=true]{background:#2b2b30;color:#fff}body[data-ds-dark-theme] .cg-context-menu{background:#202023!important;color:#f4f4f5!important;border-color:#3f3f46!important;box-shadow:0 12px 30px #0006!important}body[data-ds-dark-theme] .cg-context-menu label{color:#a1a1aa!important}body[data-ds-dark-theme] .cg-context-menu select,body[data-ds-dark-theme] .cg-context-menu textarea{background:#27272a!important;color:#f4f4f5!important;border-color:#48484f!important}body[data-ds-dark-theme] .cg-context-target{background:#29292e!important;color:#c4c4cc!important}body[data-ds-dark-theme] .cg-form textarea{background:#202023;color:#f4f4f5;border-color:#3f3f46}.cg-help dd{white-space:pre-wrap}.cg-node[data-node-type=functional] .cg-node-head{fill:#cffafe}.cg-context-check{display:flex!important;align-items:center!important;gap:7px!important;margin:0 0 9px!important;color:#374151!important;font-size:13px!important}.cg-context-check input{width:auto!important;margin:0!important;accent-color:#2563eb}body[data-ds-dark-theme] .cg-context-check{color:#e4e4e7!important}.cg-preview-heading{margin:14px 0 5px!important}.cg-preview-list{display:grid;gap:4px}.cg-preview-list>div{display:flex;align-items:center;gap:5px;min-width:0;color:var(--cg-muted);font-size:12px}.cg-preview-list span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cg-preview-list .cg-icon{width:24px;height:24px;margin-left:auto;font-size:14px;flex:0 0 auto}
 `;
 
+const TASK_WORKFLOW_STYLES = String.raw`
+.cg-header{position:relative;z-index:5}.cg-node-menu-anchor{position:relative;display:inline-flex}.cg-node-menu{position:absolute;right:0;top:34px;z-index:10;display:grid;min-width:132px;padding:4px;background:#fff;border:1px solid var(--cg-line);border-radius:6px;box-shadow:0 10px 24px #00000018}.cg-node-menu-item{border:0;border-radius:4px;background:transparent;color:#27272a;padding:6px 8px;text-align:left;font:inherit;cursor:pointer}.cg-node-menu-item:hover{background:#f4f4f5;color:#111827}.cg-context-menu button:disabled{opacity:.55!important;cursor:default!important}.cg-context-actions{display:flex!important;gap:7px!important;margin-top:10px!important}.cg-context-menu .cg-context-actions button{flex:1!important;margin:0!important}.cg-context-menu button.cg-context-secondary{background:#f3f4f6!important;color:#374151!important}.cg-context-menu button.cg-context-secondary:hover{background:#e5e7eb!important}.cg-context-message{margin:8px 0 0!important;color:#64748b!important;font-size:12px!important;line-height:17px!important}.cg-context-message[data-error=true]{color:#b91c1c!important}.cg-context-divider{height:1px!important;margin:14px 0!important;background:#e5e7eb!important}body[data-ds-dark-theme] .cg-node-menu{background:#202023;border-color:#3f3f46;box-shadow:0 10px 24px #0008}body[data-ds-dark-theme] .cg-node-menu-item{color:#e4e4e7}body[data-ds-dark-theme] .cg-node-menu-item:hover{background:#2b2b30;color:#fff}body[data-ds-dark-theme] .cg-context-menu button.cg-context-secondary{background:#303036!important;color:#e4e4e7!important}body[data-ds-dark-theme] .cg-context-menu button.cg-context-secondary:hover{background:#3b3b42!important}body[data-ds-dark-theme] .cg-context-divider{background:#3f3f46!important}
+`;
+
 const API = '/context-graph/api';
 const TYPES = ['provides', 'consumes', 'depends_on', 'produces', 'affects', 'constrains', 'implements', 'feeds', 'transforms', 'triggers', 'related_to', 'targets', 'requires', 'constrained_by', 'applies_to', 'interface', 'implemented_by', 'derived_from', 'conflicts_with', 'supersedes', 'contains', 'uses', 'tests', 'documents', 'force_include', 'force_exclude'];
 const MODES = ['AUTO', 'MANUAL', 'FORCE_INCLUDE', 'FORCE_EXCLUDE'];
@@ -18,6 +22,7 @@ const NODE_TYPES = ['functional', 'code_module', 'implementation_file', 'impleme
 const PRIORITIES = ['critical', 'high', 'normal', 'low'];
 const STATUSES = ['active', 'resolved', 'deprecated', 'superseded', 'archived'];
 const TASKS = [['develop', '开发'], ['debug', '调试'], ['refactor', '重构'], ['test', '测试'], ['review', '审查'], ['docs', '文档']];
+const CREATE_NODE_TYPES = [['functional', '功能', '新建功能'], ['task', '任务', '新建任务'], ['requirement', '需求', '新建需求'], ['constraint', '约束', '新建约束'], ['decision', '决策', '新建决策'], ['issue', '问题', '新建问题'], ['note', '备注', '新建备注']];
 const CONTEXT_BUDGETS = [2000, 4000, 6000, 8000, 12000, 16000];
 const DEFAULT_SESSION_CONTEXT = { autoInject: true, tokenBudget: 6000, reuseContext: true, maxImplementationFiles: 2, semanticDepth: 2, include: [], exclude: [] };
 const NODE_W = 178;
@@ -89,8 +94,22 @@ function Checks({ value = [], onChange }) {
     h('input', { type: 'checkbox', checked: value.includes(scope), onChange: event => onChange(event.target.checked ? [...value, scope] : value.filter(item => item !== scope)) }), scope)));
 }
 
-function ContextCommand({ sessionId, projectPath, inputActions, targetStore }) {
-  const [open, setOpen] = useState(false); const [taskType, setTaskType] = useState('develop'); const [task, setTask] = useState(''); const [target, setTarget] = useState(() => targetStore.get(sessionId)); const [settings, setSettings] = useState(DEFAULT_SESSION_CONTEXT); const anchorRef = useRef(null); const buttonRef = useRef(null);
+function ContextCommand({ sessionId, projectPath, inputActions, targetStore, sendPrompt }) {
+  const [open, setOpen] = useState(false);
+  const [taskType, setTaskType] = useState('develop');
+  const [task, setTask] = useState('');
+  const [target, setTarget] = useState(() => targetStore.get(sessionId));
+  const [taskTargets, setTaskTargets] = useState([]);
+  const [chosenTarget, setChosenTarget] = useState('');
+  const [targetsLoading, setTargetsLoading] = useState(false);
+  const [targetLoadError, setTargetLoadError] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [taskMessage, setTaskMessage] = useState('');
+  const [taskFailed, setTaskFailed] = useState(false);
+  const [settings, setSettings] = useState(DEFAULT_SESSION_CONTEXT);
+  const anchorRef = useRef(null);
+  const buttonRef = useRef(null);
+
   useEffect(() => targetStore.subscribe(sessionId, setTarget), [sessionId, targetStore]);
   useEffect(() => {
     let active = true;
@@ -99,6 +118,27 @@ function ContextCommand({ sessionId, projectPath, inputActions, targetStore }) {
     return () => { active = false; };
   }, [projectPath, sessionId]);
   useEffect(() => {
+    setChosenTarget('');
+    setTaskTargets([]);
+  }, [projectPath, sessionId]);
+  useEffect(() => {
+    if (!open || !projectPath) return undefined;
+    let active = true;
+    setTargetsLoading(true);
+    setTargetLoadError('');
+    request(`/graph?project=${encodeURIComponent(projectPath)}`).then(graph => {
+      if (!active) return;
+      const functional = (graph.nodes || []).filter(node => node.type === 'functional');
+      setTaskTargets(functional);
+      setChosenTarget(current => functional.some(node => node.id === current) ? current : '');
+    }).catch(cause => {
+      if (!active) return;
+      setTaskTargets([]);
+      setTargetLoadError(`无法加载功能节点：${cause.message}`);
+    }).finally(() => { if (active) setTargetsLoading(false); });
+    return () => { active = false; };
+  }, [open, projectPath]);
+  useEffect(() => {
     if (!open) return undefined;
     const dismiss = event => { if (!anchorRef.current?.contains(event.target)) setOpen(false); };
     const keydown = event => { if (event.key === 'Escape') setOpen(false); };
@@ -106,16 +146,79 @@ function ContextCommand({ sessionId, projectPath, inputActions, targetStore }) {
     window.addEventListener('keydown', keydown);
     return () => { document.removeEventListener('pointerdown', dismiss, true); window.removeEventListener('keydown', keydown); };
   }, [open]);
+
   const updateSettings = async patch => {
     if (!projectPath) return;
-    const optimistic = { ...settings, ...patch }; setSettings(optimistic);
+    const optimistic = { ...settings, ...patch };
+    setSettings(optimistic);
     try { setSettings(await request('/session-settings', { method: 'POST', body: JSON.stringify({ projectPath, sessionId, ...patch }) })); }
     catch { setSettings(settings); }
   };
-  const addToDraft = () => { const label = TASKS.find(([key]) => key === taskType)?.[1] || taskType; inputActions.setDraft(`任务类型：${label}${target ? `\n目标模块：${target}` : ''}\n\n${task}`.trim()); setOpen(false); };
+  const taskLabel = TASKS.find(([key]) => key === taskType)?.[1] || taskType;
+  const addToDraft = () => {
+    const content = task.trim();
+    if (!content) { setTaskFailed(true); setTaskMessage('请先填写任务内容'); return; }
+    const draftTarget = chosenTarget || target;
+    inputActions.setDraft(`任务类型：${taskLabel}${draftTarget ? `\n目标模块：${draftTarget}` : ''}\n\n${content}`);
+    setTaskMessage('');
+    setTaskFailed(false);
+    setOpen(false);
+  };
+  const createTaskAndSend = async () => {
+    const content = task.trim();
+    if (!content || creating) {
+      if (!content) { setTaskFailed(true); setTaskMessage('请先填写任务内容'); }
+      return;
+    }
+    if (!projectPath) { setTaskFailed(true); setTaskMessage('当前会话没有工作区'); return; }
+    let persisted = false;
+    setCreating(true);
+    setTaskMessage('');
+    setTaskFailed(false);
+    try {
+      const created = await request('/tasks', { method: 'POST', body: JSON.stringify({ projectPath, sessionId, content, taskType, target: chosenTarget || undefined }) });
+      if (!created.task?.id) throw new Error('服务未返回新建任务');
+      persisted = true;
+      targetStore.set(sessionId, created.task.id);
+      await sendPrompt(`任务类型：${taskLabel}\n目标模块：${created.target || '自动识别'}\n\n${content}`);
+      setTask('');
+      setOpen(false);
+    } catch (cause) {
+      setTaskFailed(true);
+      setTaskMessage(persisted ? `任务已创建，但发送失败：${cause.message}` : cause.message);
+    } finally {
+      setCreating(false);
+    }
+  };
+
   const rect = open ? buttonRef.current?.getBoundingClientRect() : null;
   const budgetOptions = CONTEXT_BUDGETS.includes(settings.tokenBudget) ? CONTEXT_BUDGETS : [...CONTEXT_BUDGETS, settings.tokenBudget].sort((left, right) => left - right);
-  return h('span', { ref: anchorRef, className: 'cg-context-anchor' }, h('button', { ref: buttonRef, type: 'button', className: 'cg-context-button', title: '上下文任务', 'aria-expanded': open, onClick: () => setOpen(value => !value) }, '上下文'), open && rect ? h('div', { className: 'cg-context-menu', role: 'dialog', 'aria-label': '上下文任务', style: { left: Math.max(12, Math.min(rect.left, window.innerWidth - 336)), bottom: window.innerHeight - rect.top + 8 } }, h('label', { className: 'cg-context-check' }, h('input', { type: 'checkbox', checked: settings.autoInject, onChange: event => void updateSettings({ autoInject: event.target.checked }) }), '自动注入当前会话'), h('label', null, '单轮上下文预算'), h('select', { value: settings.tokenBudget, onChange: event => void updateSettings({ tokenBudget: Number(event.target.value) }) }, budgetOptions.map(value => h('option', { key: value, value }, `${value} tokens`))), h('label', null, '相关实现文件'), h('select', { value: settings.maxImplementationFiles, onChange: event => void updateSettings({ maxImplementationFiles: Number(event.target.value) }) }, [1, 2, 3, 4, 5].map(value => h('option', { key: value, value }, `${value} 个`))), h('label', null, '语义关联层数'), h('select', { value: settings.semanticDepth, onChange: event => void updateSettings({ semanticDepth: Number(event.target.value) }) }, [1, 2, 3].map(value => h('option', { key: value, value }, `${value} 层`))), h('label', { className: 'cg-context-check' }, h('input', { type: 'checkbox', checked: settings.reuseContext, onChange: event => void updateSettings({ reuseContext: event.target.checked }) }), '复用未变化的上下文'), h('label', null, '任务类型'), h('select', { value: taskType, onChange: event => setTaskType(event.target.value) }, TASKS.map(([key, label]) => h('option', { key, value: key }, label))), h('div', { className: 'cg-context-target', title: target || '自动识别目标模块' }, target ? `目标模块：${target}` : '目标模块：自动识别'), h('label', null, '任务内容'), h('textarea', { value: task, placeholder: '描述需要完成的工作', onChange: event => setTask(event.target.value) }), h('button', { type: 'button', onClick: addToDraft }, '添加到输入框')) : null);
+  const message = taskMessage || targetLoadError;
+  const messageError = taskFailed || Boolean(targetLoadError);
+  return h('span', { ref: anchorRef, className: 'cg-context-anchor' },
+    h('button', { ref: buttonRef, type: 'button', className: 'cg-context-button', title: '上下文任务', 'aria-expanded': open, onClick: () => { setTaskMessage(''); setTaskFailed(false); setOpen(value => !value); } }, '上下文'),
+    open && rect ? h('div', { className: 'cg-context-menu', role: 'dialog', 'aria-label': '上下文任务', style: { left: Math.max(12, Math.min(rect.left, window.innerWidth - 336)), bottom: window.innerHeight - rect.top + 8 } },
+      h('label', null, '任务类型'),
+      h('select', { value: taskType, onChange: event => setTaskType(event.target.value) }, TASKS.map(([key, label]) => h('option', { key, value: key }, label))),
+      h('label', null, '目标功能'),
+      h('select', { value: chosenTarget, onChange: event => setChosenTarget(event.target.value), disabled: targetsLoading },
+        h('option', { value: '' }, targetsLoading ? '正在加载功能…' : '自动识别功能'),
+        taskTargets.map(node => h('option', { key: node.id, value: node.id }, node.title || node.label || node.id))),
+      h('label', null, '任务内容'),
+      h('textarea', { value: task, placeholder: '描述需要完成的工作', onChange: event => { setTask(event.target.value); setTaskMessage(''); setTaskFailed(false); } }),
+      message ? h('div', { className: 'cg-context-message', 'data-error': messageError }, message) : null,
+      h('div', { className: 'cg-context-actions' },
+        h('button', { className: 'cg-context-secondary', type: 'button', disabled: !task.trim() || creating, onClick: addToDraft }, '添加到输入框'),
+        h('button', { className: 'cg-context-primary', type: 'button', disabled: !task.trim() || creating, onClick: () => void createTaskAndSend() }, creating ? '正在创建…' : '创建任务并发送')),
+      h('div', { className: 'cg-context-divider' }),
+      h('label', { className: 'cg-context-check' }, h('input', { type: 'checkbox', checked: settings.autoInject, onChange: event => void updateSettings({ autoInject: event.target.checked }) }), '自动注入当前会话'),
+      h('label', null, '单轮上下文预算'),
+      h('select', { value: settings.tokenBudget, onChange: event => void updateSettings({ tokenBudget: Number(event.target.value) }) }, budgetOptions.map(value => h('option', { key: value, value }, `${value} tokens`))),
+      h('label', null, '相关实现文件'),
+      h('select', { value: settings.maxImplementationFiles, onChange: event => void updateSettings({ maxImplementationFiles: Number(event.target.value) }) }, [1, 2, 3, 4, 5].map(value => h('option', { key: value, value }, `${value} 个`))),
+      h('label', null, '语义关联层数'),
+      h('select', { value: settings.semanticDepth, onChange: event => void updateSettings({ semanticDepth: Number(event.target.value) }) }, [1, 2, 3].map(value => h('option', { key: value, value }, `${value} 层`))),
+      h('label', { className: 'cg-context-check' }, h('input', { type: 'checkbox', checked: settings.reuseContext, onChange: event => void updateSettings({ reuseContext: event.target.checked }) }), '复用未变化的上下文')) : null);
 }
 
 function Inspector({ graph, selected, updateNode, updateEdge, remove, showImplementation }) {
@@ -172,7 +275,9 @@ function GraphPanel({ sessionId, projectPath, sendPrompt, setTarget }) {
   const [viewMode, setViewMode] = useState('semantic');
   const [implementationFocus, setImplementationFocus] = useState(null);
   const [functionalProposal, setFunctionalProposal] = useState(null);
+  const [nodeMenuOpen, setNodeMenuOpen] = useState(false);
   const svgRef = useRef(null);
+  const nodeMenuRef = useRef(null);
   const graphRef = useRef(graph); graphRef.current = graph;
   const selectedRef = useRef(selected); selectedRef.current = selected;
   const pressRef = useRef({ key: '', time: 0 });
@@ -188,6 +293,14 @@ function GraphPanel({ sessionId, projectPath, sendPrompt, setTarget }) {
     } catch (cause) { announce(cause.message, true); }
   }, [announce, projectPath]);
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    if (!nodeMenuOpen) return undefined;
+    const dismiss = event => { if (!nodeMenuRef.current?.contains(event.target)) setNodeMenuOpen(false); };
+    const keydown = event => { if (event.key === 'Escape') setNodeMenuOpen(false); };
+    document.addEventListener('pointerdown', dismiss, true);
+    window.addEventListener('keydown', keydown);
+    return () => { document.removeEventListener('pointerdown', dismiss, true); window.removeEventListener('keydown', keydown); };
+  }, [nodeMenuOpen]);
 
   const save = useCallback(async () => {
     if (!graphRef.current || !projectPath) return;
@@ -208,11 +321,22 @@ function GraphPanel({ sessionId, projectPath, sendPrompt, setTarget }) {
       : { ...previous, edges: previous.edges.filter((_edge, index) => index !== current.index) });
     setSelected(null); setInspected(null); announce('已删除，保存后生效');
   }, [announce]);
-  const addNode = useCallback(() => {
-    const functional = viewMode === 'semantic'; const id = `${functional ? 'function' : 'note'}-${Date.now().toString(36)}`;
-    const node = { id, type: functional ? 'functional' : 'note', title: functional ? '新建功能' : '新建上下文', label: functional ? '新建功能' : '新建上下文', content: '', description: '', source: 'user', priority: 'normal', status: 'active', mode: 'MANUAL', metadata: { layer: functional ? 'functional' : 'structured' }, x: Math.max(40, (120 - view.x) / view.zoom), y: Math.max(40, (100 - view.y) / view.zoom) };
-    setGraph(previous => ({ ...previous, nodes: [...previous.nodes, node] })); setSelected({ kind: 'node', id }); setInspected({ kind: 'node', id }); announce('已创建节点，编辑后保存');
-  }, [announce, view, viewMode]);
+  const addNode = useCallback(type => {
+    const template = CREATE_NODE_TYPES.find(([key]) => key === type);
+    if (!template) return;
+    if (!graphRef.current) { announce('图谱尚未载入', true); return; }
+    const [, label, title] = template;
+    const ids = new Set(graphRef.current.nodes.map(node => node.id));
+    const baseId = `${type}-${Date.now().toString(36)}`;
+    let id = baseId; let suffix = 2;
+    while (ids.has(id)) { id = `${baseId}-${suffix}`; suffix += 1; }
+    const node = { id, type, title, label: title, content: '', description: '', source: 'user', priority: 'normal', status: 'active', mode: 'MANUAL', metadata: { layer: type === 'functional' ? 'functional' : 'structured' }, x: Math.max(40, (120 - view.x) / view.zoom), y: Math.max(40, (100 - view.y) / view.zoom) };
+    setGraph(previous => ({ ...previous, nodes: [...previous.nodes, node] }));
+    setNodeMenuOpen(false);
+    setSelected({ kind: 'node', id });
+    setInspected({ kind: 'node', id });
+    announce(`已创建${label}节点，编辑后保存`);
+  }, [announce, view]);
   const getSessionSettings = useCallback(async () => {
     if (!projectPath) return DEFAULT_SESSION_CONTEXT;
     try { return await request(`/session-settings?project=${encodeURIComponent(projectPath)}&sessionId=${encodeURIComponent(sessionId)}`); }
@@ -261,7 +385,7 @@ function GraphPanel({ sessionId, projectPath, sendPrompt, setTarget }) {
       else if (!editing && (event.key === 'Delete' || event.key === 'Backspace')) { event.preventDefault(); remove(); }
       else if (!editing && event.key.toLowerCase() === 'f') fit();
       else if (!editing && event.key.toLowerCase() === 'a') layout();
-      else if (event.key === 'Escape') { setGesture(null); setSelected(null); setInspected(null); setHelp(false); setPreviewData(null); setFunctionalProposal(null); }
+      else if (event.key === 'Escape') { setGesture(null); setSelected(null); setInspected(null); setHelp(false); setPreviewData(null); setFunctionalProposal(null); setNodeMenuOpen(false); }
     };
     window.addEventListener('keydown', keydown);
     return () => window.removeEventListener('keydown', keydown);
@@ -313,7 +437,9 @@ function GraphPanel({ sessionId, projectPath, sendPrompt, setTarget }) {
       h('select', { className: 'cg-filter', value: viewMode, onChange: event => { setViewMode(event.target.value); setImplementationFocus(null); } }, h('option', { value: 'semantic' }, '语义'), h('option', { value: 'implementation' }, '实现'), h('option', { value: 'context' }, '当前上下文')),
       h('input', { className: 'cg-search', value: search, placeholder: '搜索节点', onChange: event => setSearch(event.target.value) }),
       h('select', { className: 'cg-filter', value: typeFilter, onChange: event => setTypeFilter(event.target.value) }, h('option', { value: 'all' }, '全部类型'), NODE_TYPES.map(type => h('option', { key: type, value: type }, type))),
-      h(IconButton, { label: '新建上下文节点', onClick: addNode }, '+'),
+      h('span', { ref: nodeMenuRef, className: 'cg-node-menu-anchor' },
+        h(IconButton, { label: '新建节点', onClick: () => setNodeMenuOpen(value => !value) }, '+'),
+        nodeMenuOpen ? h('div', { className: 'cg-node-menu', role: 'menu', 'aria-label': '新建节点类型' }, CREATE_NODE_TYPES.map(([type, label]) => h('button', { key: type, className: 'cg-node-menu-item', type: 'button', role: 'menuitem', onClick: () => addNode(type) }, label))) : null),
       h(IconButton, { label: '推断功能模块', onClick: () => void inferFunctional(false) }, '◇'),
       h(IconButton, { label: 'Context Preview', onClick: showPreview }, '◎'),
       h(IconButton, { label: '扫描代码', onClick: scan }, '↻'),
@@ -353,7 +479,7 @@ function apply(ctx) {
   ctx.effect(() => {
     const style = document.createElement('style');
     style.dataset.contextGraph = 'true';
-    style.textContent = styles;
+    style.textContent = `${styles}${TASK_WORKFLOW_STYLES}`;
     document.head.append(style);
     return () => style.remove();
   }, 'context-graph: styles');
@@ -361,7 +487,13 @@ function apply(ctx) {
   ctx.inject(['slots', 'sessions', 'conversation'], scope => {
     const targetListeners = new Map(); const targets = new Map();
     const targetStore = { get: id => targets.get(id) || '', set: (id, value) => { targets.set(id, value); for (const listener of targetListeners.get(id) || []) listener(value); }, subscribe: (id, listener) => { const listeners = targetListeners.get(id) || new Set(); listeners.add(listener); targetListeners.set(id, listeners); return () => listeners.delete(listener); } };
-    const disposeContext = scope.slots.inject('conversation.input.left', () => scope.slots.register({ name: 'conversation.input.left', id: 'context-graph-task', order: 100, registrant: 'dsh-context-graph', inject: sessionId => ({ sessionId, projectPath: scope.sessions.list.getSnapshot().byId[sessionId]?.cwd || '', targetStore }) }, ContextCommand));
+    const sendSessionPrompt = async (sessionId, text) => {
+      const sessionScope = scope.sessions.scope(sessionId);
+      const conversation = sessionScope?.get('conversation');
+      if (!conversation) throw new Error('当前会话尚未准备好');
+      await conversation.send(text);
+    };
+    const disposeContext = scope.slots.inject('conversation.input.left', () => scope.slots.register({ name: 'conversation.input.left', id: 'context-graph-task', order: 100, registrant: 'dsh-context-graph', inject: sessionId => ({ sessionId, projectPath: scope.sessions.list.getSnapshot().byId[sessionId]?.cwd || '', targetStore, sendPrompt: text => sendSessionPrompt(sessionId, text) }) }, ContextCommand));
     const disposeView = scope.slots.inject('conversation.view', () => scope.slots.register({
       name: 'conversation.view',
       id: 'context-graph',
@@ -374,12 +506,7 @@ function apply(ctx) {
           sessionId,
           projectPath,
           setTarget: value => targetStore.set(sessionId, value),
-          sendPrompt: async text => {
-            const sessionScope = scope.sessions.scope(sessionId);
-            const conversation = sessionScope?.get('conversation');
-            if (!conversation) throw new Error('当前会话尚未准备好');
-            await conversation.send(text);
-          },
+          sendPrompt: text => sendSessionPrompt(sessionId, text),
         };
       },
     }, GraphPanel));

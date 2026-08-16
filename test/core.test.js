@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { analyzeProject, compileContext, emptyGraph, reconcileGraphs, validateGraph } from '../src/core.js';
+import { analyzeProject, compileContext, createTaskNode, emptyGraph, reconcileGraphs, validateGraph } from '../src/core.js';
 import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -79,4 +79,58 @@ test('compiler prioritizes target, honors force exclude, and respects budget', a
   const graph = emptyGraph(root); graph.nodes = [{ id: 'a', path: 'a.py' }, { id: 'b', path: 'b.py', mode: 'FORCE_EXCLUDE' }]; graph.edges = [{ source: 'a', target: 'b', type: 'interface', scope: ['interface', 'state'] }];
   const result = await compileContext({ projectPath: root, graph, target: 'a', task: 'change cache', tokenBudget: 1000 });
   assert.equal(result.target, 'a'); assert.ok(result.included.some((item) => item.label === 'User task')); assert.ok(result.excluded.some((item) => item.module === 'b' && item.reason === 'FORCE_EXCLUDE'));
+});
+
+test('creates an immutable task node linked to its selected target', () => {
+  const graph = emptyGraph('/tmp/project');
+  graph.nodes.push({ id: 'function.editor', type: 'functional', title: '编辑器功能', x: 80, y: 80 });
+  const original = structuredClone(graph);
+  const created = createTaskNode(graph, { content: '修复编辑器的保存逻辑', taskType: 'fix', target: 'function.editor' });
+  assert.deepEqual(graph, original);
+  assert.equal(created.task.type, 'task');
+  assert.equal(created.task.content, '修复编辑器的保存逻辑');
+  assert.equal(created.task.metadata.taskType, 'fix');
+  assert.ok(created.graph.nodes.some(node => node.id === created.task.id));
+  assert.deepEqual(created.graph.edges.find(edge => edge.source === created.task.id && edge.target === 'function.editor' && edge.type === 'targets')?.scope, ['code', 'context']);
+  assert.deepEqual(validateGraph(created.graph), []);
+});
+
+test('requires content when creating a task node', () => {
+  assert.throws(() => createTaskNode(emptyGraph('/tmp/project'), { content: '  ' }), /Task content is required/);
+});
+
+test('task target edges include source code when the selected target is a module', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'context-graph-task-code-'));
+  await writeFile(path.join(root, 'worker.py'), 'def save_document(): return True\n');
+  const graph = emptyGraph(root);
+  graph.nodes.push({ id: 'worker', type: 'code_module', path: 'worker.py' });
+  const created = createTaskNode(graph, { content: '修复保存逻辑', target: 'worker' });
+  const result = await compileContext({ projectPath: root, graph: created.graph, entry: created.task.id, task: '修复保存逻辑', tokenBudget: 2000 });
+  assert.ok(result.included.some(item => item.node === 'worker' && item.scope === 'code'));
+});
+
+test('does not pull historical tasks into a shared target context', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'context-graph-task-isolation-'));
+  const graph = emptyGraph(root);
+  graph.nodes = [
+    { id: 'function.editor', type: 'functional', title: '编辑器', content: '管理编辑器功能' },
+    { id: 'task-history', type: 'task', title: '旧任务', content: '迁移旧版存储格式' },
+    { id: 'task-current', type: 'task', title: '当前任务', content: '修复当前保存失败' },
+  ];
+  graph.edges = [
+    { source: 'task-history', target: 'function.editor', type: 'targets', scope: ['code', 'context'], mode: 'MANUAL' },
+    { source: 'task-current', target: 'function.editor', type: 'targets', scope: ['code', 'context'], mode: 'MANUAL' },
+  ];
+  const result = await compileContext({ projectPath: root, graph, entry: 'task-current', task: '继续修复当前保存失败', tokenBudget: 2000, semanticDepth: 2 });
+  assert.ok(result.included.some(item => item.node === 'task-current'));
+  assert.ok(!result.included.some(item => item.node === 'task-history'));
+});
+
+test('does not inject a persisted task twice when the sent message contains it', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'context-graph-task-dedup-'));
+  const content = '修复文档保存失败';
+  const created = createTaskNode(emptyGraph(root), { content });
+  const result = await compileContext({ projectPath: root, graph: created.graph, entry: created.task.id, task: `任务类型：开发\n目标模块：自动识别\n\n${content}`, tokenBudget: 2000 });
+  const taskItems = result.included.filter(item => item.node === created.task.id);
+  assert.deepEqual(taskItems.map(item => item.scope), ['task']);
 });
