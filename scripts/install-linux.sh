@@ -16,7 +16,7 @@ if [ "$node_major" -lt 22 ]; then
   exit 1
 fi
 
-profile=${DSH_PROFILE:-default}
+profile=${DSH_PROFILE:-web}
 chmod +x src/analyze_python.py scripts/install-linux.sh
 dsh plugin --profile "$profile" add -w .
 echo "Installed into DeepSeek Harness profile: $profile"

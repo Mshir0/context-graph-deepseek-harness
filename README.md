@@ -31,23 +31,23 @@ DSH model adapter (DeepSeek / other configured provider)
 ```bash
 git clone https://github.com/Mshir0/context-graph-deepseek-harness.git
 cd context-graph-deepseek-harness
-dsh plugin --profile default add -w .
+dsh plugin --profile web add -w .
 ```
 
 也可以直接从 GitHub 安装：
 
 ```bash
-dsh plugin --profile default add -w github:Mshir0/context-graph-deepseek-harness
+dsh plugin --profile web add -w github:Mshir0/context-graph-deepseek-harness
 ```
 
 确认 bundle 已进入组合配置并启动 Harness：
 
 ```bash
-dsh --profile default --dump-config
-dsh --profile default web
+dsh --profile web --dump-config
+dsh web
 ```
 
-`--dump-config` 中应出现 `context-graph`。插件没有 `prepare` 构建脚本，因此从 GitHub 安装不需要放开 pnpm 的安装期代码执行。
+`--dump-config` 中应出现 `context-graph`。`web` 是 DSH 的独立应用命令，它固定使用 `web` profile，因此不能写成 `dsh --profile web web`。插件没有 `prepare` 构建脚本，因此从 GitHub 安装不需要放开 pnpm 的安装期代码执行。
 
 ## 在 DSH 中使用
 
