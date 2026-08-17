@@ -49,7 +49,7 @@ const DEFAULTS = {
   // DSH currently sends maxTokens=256000 for some providers. Keep the
   // firewall budget above that request so short ordinary messages are not
   // rejected before the model adapter receives them.
-  requestTokenBudget: 300000,
+  requestTokenBudget: 512000,
   outputReserveTokens: 256000,
   tokenSafetyRatio: 1.15,
   allowedInstructionPlugins: [],

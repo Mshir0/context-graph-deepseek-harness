@@ -209,7 +209,7 @@ Host 端仅挂载同源 `/context-graph/api/*` 数据接口，并校验请求路
       name: dsh-context-graph
       config:
         tokenBudget: 6000
-        requestTokenBudget: 300000
+        requestTokenBudget: 512000
         outputReserveTokens: 256000
         tokenSafetyRatio: 1.15
         allowedInstructionPlugins: []
