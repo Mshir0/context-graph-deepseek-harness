@@ -235,3 +235,16 @@ test('a known empty history can receive the first snapshot without a Surface API
   const session = { deriveMessages: () => [] };
   assert.deepEqual(placeContextSnapshot(session, snapshot), { action: 'prepend', surfaceNodesBefore: 0 });
 });
+
+test('runtime-only messages do not block the first user snapshot', () => {
+  const snapshot = createContextSnapshot(compiled(), 'function.editor');
+  const session = {
+    deriveMessages: () => [{
+      role: 'user',
+      content: [{ type: 'text', text: 'Harness runtime instruction' }],
+      source: { kind: 'plugin', plugin: '@deepseek-ai/dsh-system-prompt', form: 'instructions' },
+    }],
+  };
+  assert.deepEqual(inspectSessionSurface(session), { known: true, nodes: [], canReplace: false });
+  assert.deepEqual(placeContextSnapshot(session, snapshot), { action: 'prepend', surfaceNodesBefore: 0 });
+});

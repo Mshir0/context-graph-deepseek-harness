@@ -330,7 +330,20 @@ function knownEmptyHistory(session) {
   try {
     if (typeof session?.deriveMessages === 'function') {
       const messages = session.deriveMessages();
-      if (Array.isArray(messages)) return messages.length === 0;
+      if (Array.isArray(messages)) {
+        if (messages.length === 0) return true;
+        // Harness may expose runtime/plugin instructions before the first
+        // user turn. They are not conversational history and do not require
+        // a Surface replacement for the first Context snapshot.
+        return !messages.some(message => (
+          message?.role === 'assistant'
+          || message?.role === 'tool'
+          || (message?.role === 'user' && (
+            message?.source?.kind !== 'plugin'
+            || message?.source?.plugin === 'context-graph'
+          ))
+        ));
+      }
     }
   } catch { /* Treat an unreadable projection as unknown. */ }
   return Array.isArray(session?.events) && session.events.length === 0;
