@@ -75,8 +75,16 @@ export function apply(ctx, input = {}) {
 
   ctx.on('agent/session-start', ({ agent }) => {
     const key = String(agent.session.id);
-    sessionState.set(key, { ...(sessionState.get(key) || {}), agent, projectPath: agent.session.header?.cwd || '' });
-    agent.ctx.effect(() => () => sessionState.delete(key), 'contextGraph.disposeSession()');
+    const previous = sessionState.get(key);
+    // A Harness restart can reuse the logical session id with a fresh Session
+    // Surface. Do not carry a prior turn's snapshot/audit into that session.
+    const state = previous?.agent?.session === agent.session ? previous : {};
+    sessionState.set(key, { ...state, agent, projectPath: agent.session.header?.cwd || '' });
+    agent.ctx.effect(() => () => {
+      // An older Agent with the same logical id must not dispose the newer
+      // Agent's state after a conversation restart.
+      if (sessionState.get(key)?.agent === agent) sessionState.delete(key);
+    }, 'contextGraph.disposeSession()');
   });
 
   ctx.on('agent/pre-step', async ({ agent, signal, turn, step }, next) => {
@@ -94,7 +102,7 @@ export function apply(ctx, input = {}) {
       const messages = filterNewTurnMessages(decision.messages, { allowedInstructionPlugins: config.allowedInstructionPlugins });
       const turnKey = firewallTurnKey(turn, decision.messages);
       const rawContext = inspectRawContext(agent.session, decision.messages);
-      if (turnKey && state.firewallTurnKey === turnKey && state.lastCompilation?.graphInjection === 'disabled') {
+      if (isSameFirewallTurn(state, turn, decision.messages) && state.lastCompilation?.graphInjection === 'disabled') {
         const previous = state.lastCompilation;
         const audit = { ...createContextAudit({ status: 'allowed', mode: config.firewallMode, turn, step, task: previous.task, target: previous.target, result: previous.result, validation: previous.validation, placement: { action: 'surface-reuse', surfaceNodesBefore: state.lastAudit?.surfaceNodesBefore }, raw: rawContext, stepMessages: decision.messages.length, allowedStepMessages: messages.length, expectedMessageFingerprints: expectedStepMessageFingerprints(agent.session, state.lastAudit, messages, { turn, step }) }), graphInjection: 'disabled', reason: 'Automatic Context Graph injection is disabled; the enforced snapshot contains no project graph context.' };
         sessionState.set(key, { ...state, lastAudit: audit });
@@ -127,7 +135,7 @@ export function apply(ctx, input = {}) {
     const turnKey = firewallTurnKey(turn, decision.messages);
     const allowedMessages = filterNewTurnMessages(decision.messages, { allowedInstructionPlugins: config.allowedInstructionPlugins });
     const rawContext = inspectRawContext(agent.session, decision.messages);
-    if (turnKey && state.firewallTurnKey === turnKey) {
+    if (isSameFirewallTurn(state, turn, decision.messages)) {
       if (config.firewallMode !== 'enforce') return decision;
       if (!state.lastCompilation || state.lastAudit?.status !== 'allowed') {
         const error = 'Context Firewall has no validated snapshot for this tool step';
@@ -556,15 +564,31 @@ async function compileStepContext(agent, task, config, selected, signal) {
 }
 
 function firewallTurnKey(turn, messages) {
-  if (Number.isInteger(turn) || typeof turn === 'string') return `turn:${turn}`;
+  const base = firewallBaseTurnKey(turn);
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
     if (message?.role !== 'user' || ['plugin', 'tool'].includes(message?.source?.kind)) continue;
-    if (message.id) return `message:${message.id}`;
+    const identity = message.id || messageFingerprints([message])[0];
+    if (identity) return `${base || 'conversation'}\0user:${identity}`;
     const text = latestUserText([message]);
-    if (text) return `task:${text}`;
+    if (text) return `${base || 'conversation'}\0task:${text}`;
   }
-  return null;
+  return base;
+}
+
+function firewallBaseTurnKey(turn) {
+  return Number.isInteger(turn) || typeof turn === 'string' ? `turn:${turn}` : null;
+}
+
+function isSameFirewallTurn(state, turn, messages) {
+  const current = firewallTurnKey(turn, messages);
+  if (!current || !state?.firewallTurnKey) return false;
+  if (current === state.firewallTurnKey) return true;
+  const base = firewallBaseTurnKey(turn);
+  // Tool steps may not carry the original user message. They still belong to
+  // the same turn, but a fresh user message with the same numeric turn does
+  // not.
+  return Boolean(base && current === base && state.firewallTurnKey.startsWith(`${base}\0`));
 }
 
 function projectedSurfaceEvents(session) {

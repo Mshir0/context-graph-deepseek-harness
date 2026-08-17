@@ -357,6 +357,51 @@ test('DSH lifecycle replaces prior model-visible history on each new user turn',
   assert.equal(disposers.length, 1);
 });
 
+test('reinitializes firewall state when a completed conversation reuses its session id', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'context-graph-session-reuse-'));
+  await writeFile(path.join(root, 'worker.py'), 'def save(value):\n    return value\n');
+  const harness = createHarnessContext();
+  apply(harness.ctx, { webUi: false });
+  const firstAgent = { session: createSession('session-reused', root), ctx: { effect() {} } };
+  harness.handlers.get('agent/session-start')({ agent: firstAgent });
+  const first = await harness.handlers.get('agent/pre-step')(
+    { agent: firstAgent, turn: 1, step: 1, signal: new AbortController().signal },
+    async () => ({ kind: 'enter', messages: [userMessage('Conversation A: update worker save')] }),
+  );
+  assert.equal(first.kind, 'enter');
+  assert.equal(first.messages[0].source?.plugin, 'context-graph');
+  firstAgent.session.enter(first.messages);
+  const stream = harness.handlers.get('llm/stream');
+  assert.equal(stream(authorizedAgentRequest(firstAgent, { sessionId: 'session-reused', system: 'Static rules', tools: [], messages: firstAgent.session.deriveMessages() }), () => 'a-streamed'), 'a-streamed');
+
+  // Harness can restart a conversation with the same logical session id while
+  // exposing a fresh surface and resetting its turn counter.
+  const secondAgent = { session: createSession('session-reused', root), ctx: { effect() {} } };
+  harness.handlers.get('agent/session-start')({ agent: secondAgent });
+  const second = await harness.handlers.get('agent/pre-step')(
+    { agent: secondAgent, turn: 1, step: 1, signal: new AbortController().signal },
+    async () => ({ kind: 'enter', messages: [userMessage('Conversation B: review worker save')] }),
+  );
+  assert.equal(second.kind, 'enter');
+  assert.equal(second.messages[0].source?.plugin, 'context-graph');
+  secondAgent.session.enter(second.messages);
+  assert.equal(stream(authorizedAgentRequest(secondAgent, { sessionId: 'session-reused', system: 'Static rules', tools: [], messages: secondAgent.session.deriveMessages() }), () => 'b-streamed'), 'b-streamed');
+  assert.equal(JSON.parse(await harness.tools.get('context_audit').execute({}, { agent: secondAgent })).status, 'allowed');
+
+  // A wrapper restart may retain the same Session object. A reset turn number
+  // must still be distinguished by the new user message id.
+  const thirdAgent = { session: secondAgent.session, ctx: { effect() {} } };
+  harness.handlers.get('agent/session-start')({ agent: thirdAgent });
+  const third = await harness.handlers.get('agent/pre-step')(
+    { agent: thirdAgent, turn: 1, step: 1, signal: new AbortController().signal },
+    async () => ({ kind: 'enter', messages: [userMessage('Conversation C: verify worker save')] }),
+  );
+  assert.equal(third.kind, 'enter');
+  assert.deepEqual(third.messages.length, 1);
+  thirdAgent.session.enter(third.messages);
+  assert.equal(stream(authorizedAgentRequest(thirdAgent, { sessionId: 'session-reused', system: 'Static rules', tools: [], messages: thirdAgent.session.deriveMessages() }), () => 'c-streamed'), 'c-streamed');
+});
+
 test('project context persists across sessions and plugin restarts without leaking session state or raw history', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'context-graph-cross-session-'));
   await writeFile(path.join(root, 'request_id.py'), [
