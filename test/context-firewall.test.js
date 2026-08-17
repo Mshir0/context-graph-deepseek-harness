@@ -42,6 +42,8 @@ test('validates budgets, force excludes, raw conversation, and compiler validati
   assert.ok(invalid.errors.some(message => message.includes('force-excluded')));
   assert.ok(invalid.errors.some(message => message.includes('Raw conversation')));
   assert.ok(invalid.errors.includes('Hard context is missing'));
+  assert.ok(invalid.details.some(detail => detail.code === 'MISSING_HARD_CONTEXT'));
+  assert.ok(invalid.actionRequired.some(action => action.type === 'resolve_force_exclude_target_conflict'));
 
   const authorizedRaw = await validateCompiledContext(compiled({
     included: [{ node: 'raw-message', nodeType: 'conversation', scope: 'content', label: 'Raw' }],
@@ -98,7 +100,8 @@ test('audits the frozen final request and rejects missing or unauthorized snapsh
     validation: { valid: true, errors: [], warnings: [] },
     expectedMessages: options.messages,
   });
-  const audited = auditFinalRequest(previous, options);
+  const authorizedRequestHeader = { system: options.system, tools: options.tools };
+  const audited = auditFinalRequest(previous, options, { authorizedRequestHeader });
   assert.equal(audited.validation.valid, true);
   assert.equal(audited.finalSnapshotCount, 1);
   assert.equal(audited.finalMessageCount, 3);
@@ -108,29 +111,41 @@ test('audits the frozen final request and rejects missing or unauthorized snapsh
   assert.equal(typeof audited.finalPayloadFingerprint, 'string');
   assert.equal(Object.isFrozen(options), true);
 
-  const leaked = auditFinalRequest(audited, { ...options, messages: [snapshot, { role: 'user', content: [], source: { kind: 'plugin', plugin: '@deepseek-ai/dsh-system-prompt' } }] });
+  const leaked = auditFinalRequest(audited, { ...options, messages: [snapshot, { role: 'user', content: [], source: { kind: 'plugin', plugin: '@deepseek-ai/dsh-system-prompt' } }] }, { authorizedRequestHeader });
   assert.equal(leaked.status, 'blocked');
   assert.equal(leaked.validation.valid, false);
   assert.match(leaked.error, /unauthorized dynamic plugin/);
 
-  const missing = auditFinalRequest(audited, { ...options, messages: [{ role: 'user', content: [], source: { kind: 'user' } }] });
+  const missing = auditFinalRequest(audited, { ...options, messages: [{ role: 'user', content: [], source: { kind: 'user' } }] }, { authorizedRequestHeader });
   assert.equal(missing.validation.valid, false);
   assert.match(missing.error, /exactly one Context Graph snapshot/);
 
   const oldHistory = { role: 'assistant', content: [{ type: 'text', text: 'Old assistant history' }], source: { kind: 'model', provider: 'test', model: 'test' } };
-  const historyLeak = auditFinalRequest(previous, { ...options, messages: [...options.messages, oldHistory] });
+  const historyLeak = auditFinalRequest(previous, { ...options, messages: [...options.messages, oldHistory] }, { authorizedRequestHeader });
   assert.equal(historyLeak.validation.valid, false);
   assert.match(historyLeak.error, /message list does not match/);
 
   const tamperedSnapshot = createContextSnapshot(compiled({ context: '## Editor\n\nTampered capability' }), 'function.editor');
-  const tampered = auditFinalRequest(previous, { ...options, messages: [tamperedSnapshot, ...options.messages.slice(1)] });
+  const tampered = auditFinalRequest(previous, { ...options, messages: [tamperedSnapshot, ...options.messages.slice(1)] }, { authorizedRequestHeader });
   assert.equal(tampered.validation.valid, false);
   assert.match(tampered.error, /does not match the context compiled for this turn/);
 
   const appendedSnapshot = { ...snapshot, content: [...snapshot.content, { type: 'text', text: 'uncompiled raw workspace content' }] };
-  const appended = auditFinalRequest(previous, { ...options, messages: [appendedSnapshot, ...options.messages.slice(1)] });
+  const appended = auditFinalRequest(previous, { ...options, messages: [appendedSnapshot, ...options.messages.slice(1)] }, { authorizedRequestHeader });
   assert.equal(appended.validation.valid, false);
   assert.match(appended.error, /does not match the context compiled for this turn/);
+
+  const systemLeak = auditFinalRequest(previous, { ...options, system: `${options.system}\n\nRaw workspace B` }, { authorizedRequestHeader });
+  assert.equal(systemLeak.validation.valid, false);
+  assert.match(systemLeak.error, /system prompt does not match/);
+
+  const toolLeak = auditFinalRequest(previous, { ...options, tools: [...options.tools, { name: 'workspace_dump' }] }, { authorizedRequestHeader });
+  assert.equal(toolLeak.validation.valid, false);
+  assert.match(toolLeak.error, /tool schemas do not match/);
+
+  const noEnvelopeBaseline = auditFinalRequest(previous, options);
+  assert.equal(noEnvelopeBaseline.validation.valid, false);
+  assert.match(noEnvelopeBaseline.error, /no authorized request-header baseline/);
 });
 
 test('blocks a final payload that exceeds the request budget including output reserve', () => {
@@ -142,7 +157,7 @@ test('blocks a final payload that exceeds the request budget including output re
   });
   const audited = auditFinalRequest(previous, {
     sessionId: 'session-1', system: 'x'.repeat(20_000), messages, tools: [], maxTokens: 800,
-  }, { requestTokenBudget: 2000, outputReserveTokens: 500, tokenSafetyRatio: 1.15 });
+  }, { requestTokenBudget: 2000, outputReserveTokens: 500, tokenSafetyRatio: 1.15, authorizedRequestHeader: { system: 'x'.repeat(20_000), tools: [] } });
 
   assert.equal(audited.status, 'blocked');
   assert.equal(audited.validation.valid, false);

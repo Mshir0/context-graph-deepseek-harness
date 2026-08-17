@@ -98,6 +98,109 @@ test('compiles relevant modular context from a task and excludes raw or forced n
   assert.equal(explicitRaw.validation.valid, true);
 });
 
+test('loads selected path-backed interfaces, documentation, and tests into compiled context', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'modular-path-context-'));
+  await mkdir(path.join(root, 'docs'));
+  await mkdir(path.join(root, 'tests'));
+  await writeFile(path.join(root, 'contract.md'), 'Public save(value) interface');
+  await writeFile(path.join(root, 'docs', 'save.md'), 'Saving design notes');
+  await writeFile(path.join(root, 'tests', 'test_save.py'), 'def test_save():\n    assert save(1) == 1\n');
+  const graph = normalizeGraph({ ...emptyGraph(root), nodes: [
+    { id: 'function.save', type: 'functional', content: 'Save values' },
+    { id: 'interface.save', type: 'interface', path: 'contract.md' },
+    { id: 'documentation.save', type: 'documentation', path: 'docs/save.md' },
+    { id: 'test.save', type: 'test', path: 'tests/test_save.py' },
+  ], edges: [
+    { source: 'function.save', target: 'interface.save', type: 'depends_on', scope: ['interface'], mode: 'MANUAL' },
+    { source: 'function.save', target: 'documentation.save', type: 'documents', scope: ['content'], mode: 'MANUAL' },
+    { source: 'function.save', target: 'test.save', type: 'tests', scope: ['test'], mode: 'MANUAL' },
+  ] }, root);
+
+  const result = await compileContext({ projectPath: root, graph, entry: 'function.save', task: 'Review save behavior', tokenBudget: 3000 });
+  assert.match(result.context, /Public save\(value\) interface/);
+  assert.match(result.context, /Saving design notes/);
+  assert.match(result.context, /def test_save/);
+  for (const id of ['interface.save', 'documentation.save', 'test.save']) {
+    assert.ok(result.included.some(item => item.node === id));
+    assert.ok(!result.excluded.some(item => item.node === id));
+  }
+});
+
+test('Context Policy limits semantic depth, implementation files, and test traversal', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'modular-policy-limits-'));
+  for (const file of ['feature_alpha.py', 'feature_beta.py', 'feature_gamma.py', 'test_feature.py']) await writeFile(path.join(root, file), `# ${file}\n`);
+  const graph = normalizeGraph({ ...emptyGraph(root), nodes: [
+    { id: 'function.root', type: 'functional', content: 'Root capability' },
+    { id: 'function.child', type: 'functional', content: 'Child capability' },
+    { id: 'function.deep', type: 'functional', content: 'Deep capability' },
+    { id: 'feature_alpha', type: 'implementation_file', path: 'feature_alpha.py' },
+    { id: 'feature_beta', type: 'implementation_file', path: 'feature_beta.py' },
+    { id: 'feature_gamma', type: 'implementation_file', path: 'feature_gamma.py' },
+    { id: 'test.feature', type: 'test', path: 'test_feature.py' },
+  ], edges: [
+    { source: 'function.root', target: 'function.child', type: 'depends_on', scope: ['interface'], mode: 'AUTO' },
+    { source: 'function.child', target: 'function.deep', type: 'depends_on', scope: ['interface'], mode: 'AUTO' },
+    { source: 'function.root', target: 'test.feature', type: 'tests', scope: ['test'], mode: 'AUTO' },
+  ], mappings: [{
+    functional: 'function.root', mode: 'AUTO', implementation: [
+      { id: 'feature_alpha', path: 'feature_alpha.py' },
+      { id: 'feature_beta', path: 'feature_beta.py' },
+      { id: 'feature_gamma', path: 'feature_gamma.py' },
+    ],
+  }] }, root);
+
+  const result = await compileContext({
+    projectPath: root,
+    graph,
+    entry: 'function.root',
+    task: 'Inspect feature_alpha feature_beta feature_gamma',
+    tokenBudget: 3000,
+    semanticDepth: 3,
+    maxImplementationFiles: 5,
+    policy: {
+      functionalDependencies: { depth: 1 },
+      interfaces: { depth: 1 },
+      implementation: { depth: 1, maxFiles: 1 },
+      tests: { depth: 0 },
+    },
+  });
+  assert.ok(result.included.some(item => item.node === 'function.child'));
+  assert.ok(!result.included.some(item => item.node === 'function.deep'));
+  assert.ok(!result.included.some(item => item.node === 'test.feature'));
+  assert.equal(new Set(result.included.filter(item => item.nodeType === 'implementation_file').map(item => item.node)).size, 1);
+  assert.equal(result.manifest.policy.implementation.maxFiles, 1);
+});
+
+test('conversation policy can explicitly admit structured raw conversation context', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'modular-conversation-policy-'));
+  const graph = normalizeGraph({ ...emptyGraph(root), nodes: [
+    { id: 'function.current', type: 'functional', content: 'Current capability' },
+    { id: 'conversation.relevant', type: 'conversation', content: 'Relevant raw decision transcript', metadata: { raw: true } },
+  ], edges: [
+    { source: 'function.current', target: 'conversation.relevant', type: 'related_to', scope: ['content'], mode: 'MANUAL' },
+  ] }, root);
+
+  const result = await compileContext({ projectPath: root, graph, entry: 'function.current', task: 'Review transcript', tokenBudget: 2000, policy: { conversation: { enabled: true } } });
+  assert.ok(result.included.some(item => item.node === 'conversation.relevant'));
+  assert.match(result.context, /Relevant raw decision transcript/);
+});
+
+test('Raw and Excluded token audit accounts for unselected source file size', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'modular-raw-audit-'));
+  await writeFile(path.join(root, 'selected.py'), 'def selected():\n    return True\n');
+  await writeFile(path.join(root, 'unselected.py'), 'x = 1\n'.repeat(2000));
+  const graph = normalizeGraph({ ...emptyGraph(root), nodes: [
+    { id: 'selected', type: 'implementation_file', path: 'selected.py' },
+    { id: 'unselected', type: 'implementation_file', path: 'unselected.py' },
+  ] }, root);
+
+  const result = await compileContext({ projectPath: root, graph, entry: 'selected', task: 'Update selected', tokenBudget: 2000 });
+  const omitted = result.excluded.find(item => item.node === 'unselected');
+  assert.ok(omitted.tokens > 0);
+  assert.ok(result.rawTokens >= result.estimatedTokens + omitted.tokens);
+  assert.ok(result.excludedTokens >= omitted.tokens);
+});
+
 test('one hundred raw conversation messages stay trace-only after structured extraction', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'modular-long-conversation-'));
   const raw = Array.from({ length: 100 }, (_, index) => ({

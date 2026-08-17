@@ -3,7 +3,7 @@ const HELPER_NAMES = new Set(['utils', 'util', 'helpers', 'helper', 'common', 'b
 
 function slug(value) { return String(value).replace(/[^a-zA-Z0-9\u4e00-\u9fff]+/g, '-').replace(/^-|-$/g, '').toLowerCase() || 'capability'; }
 function titleCase(value) { return value.split(/[._/-]+/).filter(Boolean).map(part => /^[a-z]{2,5}$/i.test(part) ? part.toUpperCase() : `${part.charAt(0).toUpperCase()}${part.slice(1)}`).join(' '); }
-function implementationNodes(graph) { return graph.nodes.filter(node => IMPLEMENTATION_TYPES.has(node.type)); }
+function implementationNodes(graph) { return graph.nodes.filter(node => IMPLEMENTATION_TYPES.has(node.type) && (!node.status || node.status === 'active')); }
 function evidenceFor(node) { return { id: node.id, path: node.path || '', evidence: node.path || node.id }; }
 
 function domainKey(node) {
@@ -39,8 +39,8 @@ function functionalTitle(group, nodeMap, domain = '') {
 
 export function inferFunctionalModules(graph, implementationFacts = { relationships: [] }) {
   const implementations = implementationNodes(graph); const nodeMap = new Map(implementations.map(node => [node.id, node]));
-  const existing = new Set(graph.nodes.filter(node => node.type === 'functional').map(node => node.id));
-  const proposals = []; const mappings = []; const functionalByImplementation = new Map();
+  const existing = new Map(graph.nodes.filter(node => node.type === 'functional').map(node => [node.id, node]));
+  const proposals = []; const updates = []; const mappings = []; const functionalByImplementation = new Map();
   const proposedIds = new Set();
   for (const inferred of capabilityGroups(implementations)) {
     const group = inferred.ids;
@@ -48,10 +48,13 @@ export function inferFunctionalModules(graph, implementationFacts = { relationsh
     let id = baseId; let suffix = 2;
     while (proposedIds.has(id)) { id = `${baseId}-${suffix}`; suffix += 1; }
     proposedIds.add(id);
-    const finalId = existing.has(id) ? id : id;
-    if (!existing.has(finalId)) proposals.push({ id: finalId, type: 'functional', title, label: title, description: `${title} capability`, content: `${title} capability`, source: 'derived', priority: 'normal', status: 'active', mode: 'AUTO', provides: [], consumes: [], inputs: [], outputs: [], metadata: { layer: 'functional', inference: 'path-domain', evidence: group.map(item => nodeMap.get(item)?.path || item) } });
+    const finalId = id;
+    const inferredNode = { id: finalId, type: 'functional', title, label: title, description: `${title} capability`, content: `${title} capability`, source: 'derived', priority: 'normal', status: 'active', mode: 'AUTO', provides: [], consumes: [], inputs: [], outputs: [], metadata: { layer: 'functional', inference: 'path-domain', evidence: group.map(item => nodeMap.get(item)?.path || item) } };
+    const current = existing.get(finalId);
+    if (!current) proposals.push(inferredNode);
+    else if ((current.mode || 'AUTO').toUpperCase() === 'AUTO') updates.push(inferredNode);
     const implementation = group.map(item => evidenceFor(nodeMap.get(item)));
-    mappings.push({ functional: finalId, implementation, evidence: implementation.map(item => item.evidence), confidence: group.length > 1 ? 0.78 : 0.58, created_by: 'auto', mode: 'AUTO' });
+    mappings.push({ functional: finalId, implementation, evidence: implementation.map(item => item.evidence), confidence: group.length > 1 ? 0.78 : 0.58, created_by: 'auto', mode: 'AUTO', metadata: { inference: 'path-domain', inference_key: inferred.key } });
     for (const item of group) functionalByImplementation.set(item, finalId);
   }
   const edgeKeys = new Set(); const edges = [];
@@ -61,15 +64,85 @@ export function inferFunctionalModules(graph, implementationFacts = { relationsh
     const key = `${source}\0${target}`; if (edgeKeys.has(key)) continue;
     edgeKeys.add(key); edges.push({ source, target, type: 'depends_on', scope: ['interface'], mode: 'AUTO', confidence: Math.min(0.8, relation.confidence || 0.7), metadata: { evidence: relation.evidence || [], derived_from: 'implementation_graph' } });
   }
-  return { nodes: proposals, mappings, edges, warnings: implementations.length === 0 ? ['No implementation nodes available'] : [] };
+  return { nodes: proposals, updates, mappings, edges, warnings: implementations.length === 0 ? ['No implementation nodes available'] : [] };
+}
+
+function withoutInvalidation(metadata = {}, mapping = false) {
+  const next = { ...metadata };
+  delete next.invalidation_status;
+  delete next.invalidated_by;
+  delete next.invalidated_at;
+  if (mapping) delete next.status;
+  return next;
+}
+
+function isAutomatic(item) {
+  return String(item?.mode || 'AUTO').toUpperCase() === 'AUTO';
+}
+
+function isInferredMapping(item) {
+  return isAutomatic(item) && (item?.created_by === 'auto' || item?.metadata?.inference === 'path-domain');
+}
+
+function implementationIds(mappings) {
+  return new Set(mappings.flatMap(mapping => mapping.implementation || []).map(item => typeof item === 'string' ? item : item.id).filter(Boolean));
+}
+
+function sameValues(left, right) {
+  return left.size === right.size && [...left].every(value => right.has(value));
 }
 
 export function applyFunctionalInference(graph, proposal) {
-  const next = structuredClone(graph); const existingNodes = new Set(next.nodes.map(node => node.id));
-  for (const node of proposal.nodes || []) if (!existingNodes.has(node.id)) { const index = next.nodes.length; next.nodes.push({ ...node, x: 80 + (index % 4) * 260, y: 80 + Math.floor(index / 4) * 180 }); existingNodes.add(node.id); }
-  const mappingKeys = new Set((next.mappings || []).map(item => `${item.functional}\0${item.implementation.map(impl => impl.id).sort().join('\0')}`));
+  const next = structuredClone(graph); const existingNodes = new Map(next.nodes.map(node => [node.id, node])); const now = new Date().toISOString();
+  const inferredNodes = [...(proposal.nodes || []), ...(proposal.updates || [])];
+  for (const node of inferredNodes) {
+    const current = existingNodes.get(node.id);
+    if (!current) {
+      const index = next.nodes.length;
+      const created = { ...node, x: 80 + (index % 4) * 260, y: 80 + Math.floor(index / 4) * 180 };
+      next.nodes.push(created);
+      existingNodes.set(node.id, created);
+    } else if (isAutomatic(current)) {
+      Object.assign(current, node, {
+        x: current.x,
+        y: current.y,
+        created_at: current.created_at,
+        updated_at: now,
+        last_verified: now,
+        status: 'active',
+        metadata: withoutInvalidation({ ...(current.metadata || {}), ...(node.metadata || {}) }),
+      });
+    }
+  }
   next.mappings ||= [];
-  for (const mapping of proposal.mappings || []) { const key = `${mapping.functional}\0${mapping.implementation.map(impl => impl.id).sort().join('\0')}`; if (!mappingKeys.has(key)) { next.mappings.push(mapping); mappingKeys.add(key); } }
+  const mappingKey = item => `${item.functional}\0${(item.implementation || []).map(impl => typeof impl === 'string' ? impl : impl.id).sort().join('\0')}`;
+  const manualMappingOwnership = new Set(next.mappings.filter(mapping => !isAutomatic(mapping)).map(mapping => mapping.functional));
+  const manualNodeOwnership = new Set(next.nodes.filter(node => node.type === 'functional' && !isAutomatic(node)).map(node => node.id));
+  for (const mapping of proposal.mappings || []) {
+    if (manualMappingOwnership.has(mapping.functional) || manualNodeOwnership.has(mapping.functional)) {
+      const owned = next.mappings.filter(item => item.functional === mapping.functional && !isAutomatic(item));
+      if (!sameValues(implementationIds(owned), implementationIds([mapping]))) {
+        for (const item of owned) item.metadata = { ...(item.metadata || {}), status: 'review_required', invalidated_by: ['functional_inference_change'], invalidated_at: now };
+        const node = existingNodes.get(mapping.functional);
+        if (node && !isAutomatic(node)) node.metadata = { ...(node.metadata || {}), invalidation_status: 'review_required', invalidated_by: ['functional_inference_change'], invalidated_at: now };
+      }
+      continue;
+    }
+    const key = mappingKey(mapping);
+    const current = next.mappings.find(item => mappingKey(item) === key);
+    if (current && isAutomatic(current)) {
+      Object.assign(current, mapping, {
+        metadata: withoutInvalidation({ ...(current.metadata || {}), ...(mapping.metadata || {}), last_verified: now }, true),
+      });
+      next.mappings = next.mappings.filter(item => item === current || item.functional !== mapping.functional || !isInferredMapping(item));
+    } else if (!current) {
+      next.mappings = next.mappings.filter(item => item.functional !== mapping.functional || !isInferredMapping(item));
+      next.mappings.push({
+        ...mapping,
+        metadata: withoutInvalidation({ ...(mapping.metadata || {}), last_verified: now }, true),
+      });
+    }
+  }
   const edgeKeys = new Set(next.edges.map(edge => `${edge.source}\0${edge.target}\0${edge.type}`));
   for (const edge of proposal.edges || []) { const key = `${edge.source}\0${edge.target}\0${edge.type}`; if (!edgeKeys.has(key)) { next.edges.push(edge); edgeKeys.add(key); } }
   return next;

@@ -104,4 +104,7 @@ test('inactive Hard types are excluded unless explicitly forced and Force Exclud
   const manifest = buildContextManifest({ task: 'test', target: 'required', tokenBudget: 100, allocation: conflict });
   assert.equal(manifest.validation.valid, false);
   assert.ok(manifest.validation.errors.some(error => error.code === 'FORCE_EXCLUDE_HARD_CONFLICT'));
+  assert.deepEqual(manifest.validation.actionRequired[0].nodes, ['required']);
+  assert.equal(manifest.validation.actionRequired[0].type, 'resolve_force_exclude_hard_conflict');
+  assert.equal(manifest.validation.actionRequired[0].options.length, 2);
 });

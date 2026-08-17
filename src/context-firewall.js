@@ -5,10 +5,11 @@ import { estimateContextTokens } from './context-policy.js';
 const IMAGE_TOKEN_PLACEHOLDER = 'x'.repeat(4096);
 
 export class ContextFirewallError extends Error {
-  constructor(message, code = 'CONTEXT_FIREWALL_BLOCKED') {
+  constructor(message, code = 'CONTEXT_FIREWALL_BLOCKED', { actionRequired = [] } = {}) {
     super(message);
     this.name = 'ContextFirewallError';
     this.code = code;
+    this.actionRequired = actionRequired;
   }
 }
 
@@ -30,8 +31,10 @@ function mergeValidation(target, value) {
   if (value === false) { target.errors.push('Compiled context validation failed'); return; }
   if (!value || value === true || typeof value !== 'object') return;
   if (value.valid === false && !value.errors?.length) target.errors.push('Compiled context validation failed');
+  target.details.push(...asMessages(value.errors).filter(item => item && typeof item === 'object'));
   target.errors.push(...validationMessages(value.errors, 'Compiled context validation failed'));
   target.warnings.push(...validationMessages(value.warnings, 'Compiled context validation warning'));
+  target.actionRequired.push(...asMessages(value.actionRequired).filter(item => item && typeof item === 'object'));
 }
 
 function itemId(item) {
@@ -39,7 +42,7 @@ function itemId(item) {
 }
 
 export async function validateCompiledContext(result, options = {}) {
-  const validation = { valid: true, errors: [], warnings: [] };
+  const validation = { valid: true, errors: [], warnings: [], details: [], actionRequired: [] };
   if (!result || typeof result !== 'object') {
     validation.errors.push('Context Compiler returned no result');
     validation.valid = false;
@@ -51,7 +54,20 @@ export async function validateCompiledContext(result, options = {}) {
   if (result.overBudget === true || (Number.isFinite(result.estimatedTokens) && result.estimatedTokens > result.tokenBudget)) validation.errors.push('Compiled context exceeds the token budget');
 
   const forceExclude = new Set((options.forceExclude || []).filter(value => typeof value === 'string'));
-  if (options.target && forceExclude.has(options.target)) validation.errors.push(`Current target is force-excluded: ${options.target}`);
+  if (options.target && forceExclude.has(options.target)) {
+    const message = `Current target is force-excluded: ${options.target}. Confirm whether to remove the exclusion and retry, or keep it and cancel this task.`;
+    validation.errors.push(message);
+    validation.details.push({ code: 'FORCE_EXCLUDE_TARGET_CONFLICT', node: options.target, message });
+    validation.actionRequired.push({
+      type: 'resolve_force_exclude_target_conflict',
+      nodes: [options.target],
+      message,
+      options: [
+        { id: 'remove_exclusion_and_retry', label: 'Remove Force Exclude and retry' },
+        { id: 'keep_exclusion_and_cancel', label: 'Keep Force Exclude and cancel this task' },
+      ],
+    });
+  }
   const included = Array.isArray(result.included) ? result.included : [];
   for (const item of included) {
     const id = itemId(item);
@@ -68,6 +84,8 @@ export async function validateCompiledContext(result, options = {}) {
   }
   validation.errors = [...new Set(validation.errors)];
   validation.warnings = [...new Set(validation.warnings)];
+  validation.details = [...new Map(validation.details.map(item => [`${item.code || ''}\0${item.node || ''}\0${(item.nodes || []).join('\0')}\0${item.message || ''}`, item])).values()];
+  validation.actionRequired = [...new Map(validation.actionRequired.map(item => [`${item.type || ''}\0${(item.nodes || []).join('\0')}\0${item.message || ''}`, item])).values()];
   validation.valid = validation.errors.length === 0;
   return validation;
 }
@@ -217,8 +235,12 @@ export function auditFinalRequest(previous, options = {}, {
   requestTokenBudget = previous?.requestTokenBudget ?? null,
   outputReserveTokens = previous?.outputReserveTokens ?? 0,
   tokenSafetyRatio = previous?.tokenSafetyRatio ?? 1,
+  authorizedRequestHeader = null,
 } = {}) {
   const final = inspectFinalRequest(options);
+  const authorized = authorizedRequestHeader && typeof authorizedRequestHeader === 'object'
+    ? inspectFinalRequest({ system: authorizedRequestHeader.system, tools: authorizedRequestHeader.tools })
+    : null;
   const errors = [];
   if (final.snapshotCount !== 1) errors.push(`Final request must contain exactly one Context Graph snapshot; found ${final.snapshotCount}`);
   if (final.snapshotCount === 1 && !previous?.snapshotFingerprint) errors.push('Context Firewall has no compiled snapshot fingerprint for this request');
@@ -230,6 +252,12 @@ export function auditFinalRequest(previous, options = {}, {
     errors.push('Final request message list does not match the messages authorized for this turn');
   }
   if (final.unauthorizedPluginCount > 0) errors.push(`Final request contains ${final.unauthorizedPluginCount} unauthorized dynamic plugin message(s)`);
+  if (!authorized) {
+    errors.push('Context Firewall has no authorized request-header baseline for system prompt and tool schemas');
+  } else {
+    if (final.systemFingerprint !== authorized.systemFingerprint) errors.push('Final system prompt does not match the authorized DSH request header');
+    if (final.toolsFingerprint !== authorized.toolsFingerprint) errors.push('Final tool schemas do not match the authorized DSH request header');
+  }
   const safetyRatio = Number.isFinite(tokenSafetyRatio) && tokenSafetyRatio >= 1 ? tokenSafetyRatio : 1;
   const configuredReserve = Number.isInteger(outputReserveTokens) && outputReserveTokens >= 0 ? outputReserveTokens : 0;
   const requestOutputLimit = Number.isInteger(options.maxTokens) && options.maxTokens > 0 ? options.maxTokens : 0;
@@ -271,6 +299,8 @@ export function auditFinalRequest(previous, options = {}, {
     finalToolTokens: final.toolTokens,
     finalSystemFingerprint: final.systemFingerprint,
     finalToolsFingerprint: final.toolsFingerprint,
+    expectedSystemFingerprint: authorized?.systemFingerprint ?? null,
+    expectedToolsFingerprint: authorized?.toolsFingerprint ?? null,
     finalPayloadFingerprint: final.payloadFingerprint,
     finalTokenEstimate: final.tokenEstimate,
     validation,

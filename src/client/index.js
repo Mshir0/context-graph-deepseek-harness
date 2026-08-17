@@ -16,6 +16,7 @@ body[data-ds-dark-theme] .cg-node-menu{background:#202023;border-color:#3f3f46;b
 .cg-side-panel{position:absolute;z-index:6;top:12px;right:12px;bottom:12px;width:min(420px,calc(100% - 24px));display:flex;flex-direction:column;overflow:hidden;background:var(--cg-bg);color:var(--cg-text);border:1px solid var(--cg-line);border-radius:8px;box-shadow:0 12px 34px #0002}.cg-side-panel button:focus-visible{outline:2px solid #60a5fa;outline-offset:1px}.cg-panel-head{display:flex;align-items:center;gap:10px;min-height:58px;padding:9px 10px 9px 12px;border-bottom:1px solid var(--cg-line);background:var(--cg-bg);flex:0 0 auto}.cg-panel-heading{min-width:0;flex:1}.cg-panel-kicker{display:block;color:var(--cg-muted);font-size:10px;line-height:15px}.cg-panel-title{display:block;font-size:14px;font-weight:650;line-height:20px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cg-panel-subtitle{display:block;margin-top:1px;color:var(--cg-muted);font-size:11px;line-height:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cg-panel-head>.cg-icon{flex:0 0 auto}.cg-panel-body{flex:1;min-height:0;overflow:auto;padding:12px}.cg-panel-actions{display:flex;justify-content:flex-end;gap:8px;padding:10px 12px;border-top:1px solid var(--cg-line);background:var(--cg-bg);flex:0 0 auto}.cg-panel-button{min-width:76px;height:32px;border:1px solid transparent;border-radius:6px;padding:0 12px;font:500 13px/30px Inter,ui-sans-serif,system-ui,sans-serif;cursor:pointer}.cg-panel-button:disabled{opacity:.45;cursor:default}.cg-panel-primary{background:var(--cg-accent);color:#fff}.cg-panel-primary:hover:not(:disabled){background:#1d4ed8}.cg-panel-secondary{border-color:var(--cg-line);background:var(--cg-bg);color:var(--cg-text)}.cg-panel-secondary:hover{background:var(--cg-soft)}.cg-preview-summary{padding-bottom:12px;border-bottom:1px solid var(--cg-line)}.cg-summary-row{display:flex;align-items:baseline;justify-content:space-between;gap:12px}.cg-summary-label{color:var(--cg-muted);font-size:12px}.cg-summary-value{font-size:13px;font-weight:650;white-space:nowrap}.cg-preview-summary[data-over=true] .cg-summary-value{color:#dc2626}.cg-budget-bar{height:5px;margin-top:8px;overflow:hidden;border-radius:3px;background:var(--cg-soft)}.cg-budget-bar>span{display:block;height:100%;border-radius:inherit;background:var(--cg-accent);transition:width .18s ease}.cg-budget-bar[data-over=true]>span{background:#dc2626}.cg-budget-caption{display:block;margin-top:5px;color:var(--cg-muted);font-size:11px}.cg-panel-section{margin-top:16px}.cg-panel-section-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:5px}.cg-panel-section-title{margin:0;font-size:12px;font-weight:650}.cg-panel-count{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:18px;padding:0 6px;border-radius:5px;background:var(--cg-soft);color:var(--cg-muted);font-size:10px}.cg-panel-task{margin:0;color:var(--cg-text);font-size:12px;line-height:1.55;overflow-wrap:anywhere;white-space:pre-wrap}.cg-context-list,.cg-proposal-list{display:grid}.cg-context-item{display:flex;align-items:center;gap:8px;min-width:0;padding:9px 0;border-bottom:1px solid var(--cg-line)}.cg-context-item:last-child,.cg-proposal-item:last-child{border-bottom:0}.cg-context-item-main{min-width:0;flex:1}.cg-context-item-title{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:550}.cg-context-item-meta,.cg-context-item-reason{display:block;margin-top:2px;color:var(--cg-muted);font-size:11px;line-height:15px;overflow-wrap:anywhere}.cg-context-item>.cg-icon{width:26px;height:26px;flex:0 0 auto;font-size:14px}.cg-panel-empty{padding:10px 0;color:var(--cg-muted);font-size:12px}.cg-proposal-summary{display:flex;align-items:center;gap:8px;padding-bottom:12px;border-bottom:1px solid var(--cg-line);color:var(--cg-muted);font-size:12px}.cg-proposal-summary strong{color:var(--cg-text);font-size:13px}.cg-proposal-summary-separator{color:var(--cg-line)}.cg-proposal-item{padding:11px 0;border-bottom:1px solid var(--cg-line)}.cg-proposal-item-head{display:flex;align-items:baseline;gap:8px;min-width:0}.cg-proposal-item-title{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:650}.cg-proposal-item-count{flex:0 0 auto;color:var(--cg-muted);font-size:11px}.cg-proposal-paths{display:grid;gap:3px;margin-top:6px}.cg-proposal-path{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--cg-muted);font:11px/16px ui-monospace,SFMono-Regular,Consolas,monospace}.cg-proposal-confidence{margin-top:5px;color:var(--cg-muted);font-size:10px}.cg-panel-warning{margin:10px 0 0;padding:8px 9px;border-left:2px solid #d97706;background:var(--cg-soft);color:var(--cg-muted);font-size:11px;line-height:16px;overflow-wrap:anywhere}
 .cg-level-filter{max-width:88px}.cg-node-expand{cursor:pointer}.cg-node-expand rect{fill:var(--cg-bg);stroke:var(--cg-line)}.cg-node-expand text{fill:var(--cg-muted);font-size:13px;font-weight:650;pointer-events:none}.cg-node-expand:hover rect{stroke:var(--cg-accent)}.cg-node-expand:hover text{fill:var(--cg-accent)}
 .cg-node[data-status=stale]{opacity:.62}.cg-node[data-status=stale] .cg-node-box{stroke-dasharray:5 3}.cg-edge[data-stale=true]{opacity:.48;stroke-dasharray:5 4}
+.cg-action-required{margin-top:8px;padding:8px 9px;border-left:2px solid #dc2626;background:var(--cg-soft);font-size:11px;line-height:16px}.cg-action-required>strong{display:block}.cg-action-required-item>span{display:block;margin-top:3px;color:var(--cg-muted);overflow-wrap:anywhere}.cg-action-options{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}.cg-action-options span{padding:2px 5px;border:1px solid var(--cg-line);border-radius:4px;color:var(--cg-text);font-size:10px}
 .cg-audit-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px;margin-top:8px}.cg-audit-cell{min-width:0;padding:7px 5px;border:1px solid var(--cg-line);border-radius:5px;background:var(--cg-soft);text-align:center}.cg-audit-label{display:block;color:var(--cg-muted);font-size:9px;line-height:13px}.cg-audit-value{display:block;margin-top:2px;overflow:hidden;text-overflow:ellipsis;font-size:11px;font-weight:650;white-space:nowrap}.cg-validation{display:flex;align-items:flex-start;gap:8px;margin-top:9px;padding:8px 9px;border:1px solid var(--cg-line);border-radius:5px;background:var(--cg-soft)}.cg-validation-mark{flex:0 0 auto;color:#71717a;font-weight:700}.cg-validation[data-status=valid] .cg-validation-mark{color:#15803d}.cg-validation[data-status=invalid] .cg-validation-mark{color:#dc2626}.cg-validation-main{min-width:0}.cg-validation-title{display:block;font-size:11px;font-weight:650}.cg-validation-issue{display:block;margin-top:2px;color:var(--cg-muted);font-size:10px;line-height:14px;overflow-wrap:anywhere}.cg-context-item-fields{display:flex;flex-wrap:wrap;gap:3px 8px;margin-top:3px;color:var(--cg-muted);font-size:10px;line-height:14px}.cg-context-item-fields span{min-width:0;overflow-wrap:anywhere}.cg-context-item-fields strong{color:var(--cg-text);font-weight:550}.cg-context-item[data-policy=hard]{border-left:2px solid #dc2626;padding-left:7px}.cg-context-item[data-policy=optional]{opacity:.82}
 body[data-ds-dark-theme] .cg-side-panel,body[data-ds-dark-theme] .cg-panel-head,body[data-ds-dark-theme] .cg-panel-actions{background:#202023;border-color:#3f3f46}body[data-ds-dark-theme] .cg-panel-secondary{background:#202023;border-color:#48484f;color:#f4f4f5}body[data-ds-dark-theme] .cg-panel-secondary:hover,body[data-ds-dark-theme] .cg-side-panel .cg-icon:hover{background:#2b2b30;color:#fff}body[data-ds-dark-theme] .cg-panel-primary{background:#3b82f6}body[data-ds-dark-theme] .cg-panel-primary:hover:not(:disabled){background:#2563eb}body[data-ds-dark-theme] .cg-preview-summary,body[data-ds-dark-theme] .cg-context-item,body[data-ds-dark-theme] .cg-proposal-summary,body[data-ds-dark-theme] .cg-proposal-item{border-color:#3f3f46}body[data-ds-dark-theme] .cg-panel-count,body[data-ds-dark-theme] .cg-budget-bar,body[data-ds-dark-theme] .cg-panel-warning{background:#2b2b30}
 @media(max-width:780px){.cg-header{gap:2px;padding:0 5px;overflow-x:auto;scrollbar-width:none}.cg-header::-webkit-scrollbar{display:none}.cg-title,.cg-search{display:none}.cg-filter{max-width:88px}.cg-icon{width:28px}}
@@ -227,6 +228,21 @@ function displayValidationIssue(issue) {
   const prefix = [issue?.code, issue?.node].filter(Boolean).join(' · ');
   const detail = issue?.message || issue?.reason || JSON.stringify(issue);
   return prefix ? `${prefix}：${detail}` : detail;
+}
+
+function displayActionOption(option) {
+  const id = typeof option === 'string' ? option : option?.id;
+  if (id === 'remove_exclusion_and_retry') return '解除排除并重试';
+  if (id === 'keep_exclusion_and_cancel') return '保留排除并取消任务';
+  return typeof option === 'string' ? option : option?.label || option?.id || '确认处理';
+}
+
+function displayActionMessage(action) {
+  const nodes = (action?.nodes || action?.candidates || []).join('、');
+  if (action?.type === 'resolve_force_exclude_hard_conflict') return `Force Exclude 与必要的 Hard Context 冲突：${nodes}。请选择解除排除后重试，或保留排除并取消当前任务。`;
+  if (action?.type === 'resolve_force_exclude_target_conflict') return `当前目标已被 Force Exclude：${nodes}。请选择解除排除后重试，或保留排除并取消当前任务。`;
+  if (action?.type === 'clarify_force_exclude_target') return `排除目标存在同名节点，请选择精确节点：${nodes}。`;
+  return action?.message || '上下文排除与当前任务冲突。';
 }
 
 function autoLayout(graph) {
@@ -486,6 +502,7 @@ function ContextPreviewPanel({ data, onClose, onForceExclude, onForceInclude }) 
   const tokenBudget = Math.max(0, Number(manifest.budget ?? data.tokenBudget) || 0);
   const budgetExceeded = Boolean(data.overBudget) || tokenBudget > 0 && usedTokens > tokenBudget;
   const validation = validationSummary(rawValidation, budgetExceeded);
+  const actionRequired = Array.isArray(rawValidation?.actionRequired) ? rawValidation.actionRequired : rawValidation?.actionRequired ? [rawValidation.actionRequired] : [];
   const budgetPercent = tokenBudget ? Math.min(100, Math.round(usedTokens / tokenBudget * 100)) : 0;
   const auditCells = [['Raw', audit.raw], ['Candidate', audit.candidate], ['Selected', audit.selected], ['Excluded', audit.excluded], ['Final', audit.final]];
   const taskText = data.previewTask || (typeof manifest.task === 'string' ? manifest.task : manifest.task?.content || manifest.task?.title) || '无';
@@ -538,7 +555,12 @@ function ContextPreviewPanel({ data, onClose, onForceExclude, onForceInclude }) 
           h('span', { className: 'cg-validation-mark', 'aria-hidden': true }, validation.status === 'valid' ? '✓' : validation.status === 'invalid' ? '×' : '?'),
           h('div', { className: 'cg-validation-main' },
             h('strong', { className: 'cg-validation-title' }, validation.label),
-            validation.issues.map((issue, index) => h('span', { className: 'cg-validation-issue', key: `${displayValidationIssue(issue)}-${index}` }, displayValidationIssue(issue)))))
+            validation.issues.map((issue, index) => h('span', { className: 'cg-validation-issue', key: `${displayValidationIssue(issue)}-${index}` }, displayValidationIssue(issue))))),
+        actionRequired.length ? h('div', { className: 'cg-action-required' },
+          h('strong', null, '需要你的确认'),
+          actionRequired.map((action, index) => h('div', { className: 'cg-action-required-item', key: `${action.type || 'action'}-${index}` },
+            h('span', null, displayActionMessage(action)),
+            h('div', { className: 'cg-action-options' }, (action.options || []).map(option => h('span', { key: typeof option === 'string' ? option : option.id }, displayActionOption(option))))))) : null
       ),
       h('section', { className: 'cg-panel-section' },
         h('div', { className: 'cg-panel-section-head' }, h('h3', { className: 'cg-panel-section-title' }, '当前任务')),
@@ -556,14 +578,15 @@ function ContextPreviewPanel({ data, onClose, onForceExclude, onForceInclude }) 
 function FunctionalProposalPanel({ proposal, graph, onClose, onConfirm }) {
   const panelRef = usePanelFocus(proposal);
   const nodes = Array.isArray(proposal.nodes) ? proposal.nodes : [];
+  const updates = Array.isArray(proposal.updates) ? proposal.updates : [];
   const mappings = Array.isArray(proposal.mappings) ? proposal.mappings : [];
   const edges = Array.isArray(proposal.edges) ? proposal.edges : [];
   const warnings = Array.isArray(proposal.warnings) ? proposal.warnings : [];
-  const knownNodes = new Map([...(graph?.nodes || []), ...nodes].map(node => [node.id, node]));
-  const proposalItems = [...new Set([...nodes.map(node => node.id), ...mappings.map(mapping => mapping.functional)])]
+  const knownNodes = new Map([...(graph?.nodes || []), ...nodes, ...updates].map(node => [node.id, node]));
+  const proposalItems = [...new Set([...nodes.map(node => node.id), ...updates.map(node => node.id), ...mappings.map(mapping => mapping.functional)])]
     .map(id => knownNodes.get(id) || { id, title: id, label: id });
   const implementationCount = mappings.reduce((total, mapping) => total + (mapping.implementation?.length || 0), 0);
-  const hasChanges = nodes.length > 0 || mappings.length > 0 || edges.length > 0;
+  const hasChanges = nodes.length > 0 || updates.length > 0 || mappings.length > 0 || edges.length > 0;
 
   return h('aside', { ref: panelRef, className: 'cg-side-panel cg-proposal-panel', role: 'dialog', 'aria-label': '功能模块推断' },
     h('header', { className: 'cg-panel-head' },
@@ -576,6 +599,8 @@ function FunctionalProposalPanel({ proposal, graph, onClose, onConfirm }) {
       h('div', { className: 'cg-proposal-summary' },
         h('span', null, h('strong', null, nodes.length), ' 个新功能'),
         h('span', { className: 'cg-proposal-summary-separator' }, '|'),
+        h('span', null, h('strong', null, updates.length), ' 个重新验证'),
+        h('span', { className: 'cg-proposal-summary-separator' }, '|'),
         h('span', null, h('strong', null, implementationCount), ' 个实现映射')),
       warnings.map((warning, index) => h('p', { className: 'cg-panel-warning', key: `${warning}-${index}` }, warning)),
       h('section', { className: 'cg-panel-section' },
@@ -585,10 +610,11 @@ function FunctionalProposalPanel({ proposal, graph, onClose, onConfirm }) {
           const implementations = Array.isArray(mapping?.implementation) ? mapping.implementation : [];
           const confidence = Number(mapping?.confidence);
           const isNew = nodes.some(item => item.id === node.id);
+          const isUpdate = updates.some(item => item.id === node.id);
           return h('article', { className: 'cg-proposal-item', key: node.id },
             h('div', { className: 'cg-proposal-item-head' },
               h('strong', { className: 'cg-proposal-item-title', title: node.title || node.label || node.id }, node.title || node.label || node.id),
-              h('span', { className: 'cg-proposal-item-count' }, `${isNew ? '新功能 · ' : ''}${implementations.length} 个实现`)),
+              h('span', { className: 'cg-proposal-item-count' }, `${isNew ? '新功能 · ' : isUpdate ? '重新验证 · ' : ''}${implementations.length} 个实现`)),
             h('span', { className: 'cg-context-item-reason', title: node.id }, node.id),
             h('div', { className: 'cg-proposal-paths' }, implementations.length
               ? implementations.map((item, index) => { const path = typeof item === 'string' ? item : item.path || item.id; return h('span', { className: 'cg-proposal-path', key: `${path}-${index}`, title: path }, path); })
@@ -751,7 +777,7 @@ function GraphPanel({ sessionId, projectPath, sendPrompt, setTarget }) {
     const requestId = ++overlayRequestRef.current;
     setHelp(false);
     setPreviewData(null);
-    try { const result = await request('/functional-infer', { method: 'POST', body: JSON.stringify({ projectPath, apply }) }); if (result.applied) { setGraph(result.graph); if (overlayRequestRef.current === requestId) { setFunctionalProposal(null); announce(`已加入 ${result.proposal.nodes.length} 个功能节点`); } } else if (overlayRequestRef.current === requestId) setFunctionalProposal(result.proposal); }
+    try { const result = await request('/functional-infer', { method: 'POST', body: JSON.stringify({ projectPath, apply }) }); if (result.applied) { setGraph(result.graph); if (overlayRequestRef.current === requestId) { setFunctionalProposal(null); announce(`已加入 ${result.proposal.nodes.length} 个功能节点，重新验证 ${result.proposal.updates?.length || 0} 个`); } } else if (overlayRequestRef.current === requestId) setFunctionalProposal(result.proposal); }
     catch (cause) { if (overlayRequestRef.current === requestId) announce(cause.message, true); }
   }, [announce, projectPath]);
   const submit = useCallback(async () => {

@@ -65,6 +65,7 @@ test('client adds a conversation view tab and sends through scoped conversation'
   assert.match(source, /sessionExcluded\.has\(id\)/);
   assert.match(source, /viewMode.*semantic/);
   assert.match(source, /functionalProposal/);
+  assert.match(source, /proposal\.updates/);
   assert.match(source, /functional-infer/);
   assert.match(source, /function FunctionalProposalPanel/);
   assert.match(source, /className: 'cg-side-panel cg-proposal-panel'/);
@@ -95,6 +96,8 @@ test('context preview renders a formal manifest, request audit, and validation s
   assert.match(source, /finalEstimatedTotalTokens/);
   assert.match(source, /validationSummary/);
   assert.match(source, /validation\.issues/);
+  assert.match(source, /actionRequired/);
+  assert.match(source, /需要你的确认/);
   assert.match(source, /forceExcludeFromPreview/);
   assert.match(source, /forceIncludeFromPreview/);
   assert.match(source, /updateSessionSettings\(\{ include, exclude \}\)/);

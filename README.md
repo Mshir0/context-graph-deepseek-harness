@@ -71,7 +71,7 @@ DSH_HARNESS_DIR=~/deepseek-harness ./scripts/install-linux.sh
 - `context_request`：按 Functional、实现模块或符号请求受硬预算限制的接口、实现、测试或文档上下文。
 - `context_audit`：读取当前 Session 最近一次 Context Firewall 决策、五段 Token 审计、验证结果和 Session Surface 放置动作。
 - `context_git_summary`：读取当前 workspace 的相关 Git 状态和历史。
-- `functional_infer`：从已分析的实现模块生成待确认的功能节点、功能关系和多对多实现映射；仅在 `apply=true` 时保存。
+- `functional_infer`：从当前有效的实现模块生成待确认的功能节点、功能关系和多对多实现映射；仅在 `apply=true` 时保存。再次确认会恢复证据仍成立的 AUTO 节点并替换其稳定映射，已删除实现和 MANUAL 所有权不会被自动覆盖。
 - `functional_map_implementation`：手动保存功能节点到实现节点的映射，不修改源码。
 - `functional_merge` / `functional_split`：调整功能节点粒度，不修改源码或文件路径。
 - `dependency_discover_modules`：只读发现 Python 模块、符号和可选变更文件的增量事实。
@@ -93,6 +93,8 @@ DSH_HARNESS_DIR=~/deepseek-harness ./scripts/install-linux.sh
 
 如果目标模块无法可靠推断，插件不会猜测或加载全工程；Agent 可调用 `context_select` 明确目标。
 
+本轮用户输入中的明确上下文排除指令（例如“修改 ASR，不要加载 Speaker”）会被保守解析为仅对本轮生效的 Force Exclude，并从目标候选中移除。只接受带有加载、包含、注入、读取等明确动作的否定语句或直接的“排除/Exclude”命令；同名语义节点无法唯一确定时会阻断并要求用户选择精确节点，不会猜测。
+
 在 `firewallMode: enforce` 下关闭某个会话的 `autoInject`，只会关闭图谱内容注入，不会恢复旧历史：插件仍用一个不含项目图谱内容的空快照替换 Session Surface，并继续执行最终请求审计。若希望完全停用边界控制，需要在插件配置中显式使用 `firewallMode: off`。
 
 ## Modular Context Graph
@@ -107,7 +109,7 @@ DSH_HARNESS_DIR=~/deepseek-harness ./scripts/install-linux.sh
 
 ## Context Manifest 与 Firewall
 
-`context_compile` 返回兼容的顶层摘要和正式 `manifest`。Manifest 记录任务、目标、预算、Policy、Graph Revision、生成时间、五段 Token 统计以及每个条目的 `policyClass`、`score`、`source`、`reason`、`tokens` 和内容哈希。`validation` 会报告预算溢出、Force Exclude 冲突、重复内容、未经授权的 Raw Conversation 等阻断原因。Preview 阶段尚未组装 Harness 的 system 和工具 schema，因此其中的 Final 显示为待审计，而不会伪装成 Selected。
+`context_compile` 返回兼容的顶层摘要和正式 `manifest`。Manifest 记录任务、目标、预算、Policy、Graph Revision、生成时间、五段 Token 统计以及每个条目的 `policyClass`、`score`、`source`、`reason`、`tokens` 和内容哈希。`validation` 会报告预算溢出、Force Exclude 冲突、重复内容、未经授权的 Raw Conversation 等阻断原因；Force Exclude 与 Hard Context 冲突时还会返回结构化 `actionRequired`，要求用户选择解除排除后重试，或保留排除并取消当前任务。Preview 阶段尚未组装 Harness 的 system 和工具 schema，因此其中的 Final 显示为待审计，而不会伪装成 Selected。
 
 `tokenBudget` 是 Selected Context Graph 条目的硬预算；`requestTokenBudget` 是最终模型调用的总预算，包含经安全系数放大的输入估值与输出预留。真正的请求边界由 Context Firewall 在 DSH Session Surface 和 `llm/stream` 上完成，并由 `context_audit` 给出 `prepend`、`surface-replace` 或 `blocked` 动作。只有验证通过、最终估值未超限且审计显示成功放置时，才能认为未选择的历史没有进入最终模型请求。
 

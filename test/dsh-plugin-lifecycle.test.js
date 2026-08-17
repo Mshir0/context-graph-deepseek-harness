@@ -6,7 +6,7 @@ import path from 'node:path';
 import { createAssistantMessage, createUserMessage, markAgentLoopRequest } from '@deepseek-ai/dsh-llm';
 import { apply, isAgentLoopRequest } from '../src/dsh-plugin.js';
 import { ContextFirewallError } from '../src/context-firewall.js';
-import { loadGraph } from '../src/core.js';
+import { emptyGraph, loadGraph, normalizeGraph, saveGraph } from '../src/core.js';
 import { loadFactsCache } from '../src/implementation-index.js';
 
 function createHarnessContext() {
@@ -64,7 +64,7 @@ test('final request interception enforces the configured total request budget', 
 
   assert.throws(
     () => harness.handlers.get('llm/stream')(
-      markAgentLoopRequest({ sessionId: 'session-request-budget', system: 'x'.repeat(20_000), tools: [], messages: agent.session.deriveMessages(), maxTokens: 400 }),
+      authorizedAgentRequest(agent, { sessionId: 'session-request-budget', system: 'x'.repeat(20_000), tools: [], messages: agent.session.deriveMessages(), maxTokens: 400 }),
       () => 'must-not-stream',
     ),
     error => error instanceof ContextFirewallError && /above the 2000 token budget/.test(error.message),
@@ -72,6 +72,98 @@ test('final request interception enforces the configured total request budget', 
   const audit = JSON.parse(await harness.tools.get('context_audit').execute({}, { agent }));
   assert.equal(audit.requestBudgetExceeded, true);
   assert.equal(audit.status, 'blocked');
+});
+
+test('final request interception binds system prompt and tools to the DSH request header', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'context-graph-request-header-'));
+  const harness = createHarnessContext();
+  apply(harness.ctx, { webUi: false, autoInject: false });
+  const agent = { session: createSession('session-request-header', root), ctx: { effect() {} } };
+  harness.handlers.get('agent/session-start')({ agent });
+  const step = await harness.handlers.get('agent/pre-step')(
+    { agent, turn: 1, step: 1, signal: new AbortController().signal },
+    async () => ({ kind: 'enter', messages: [userMessage('Run with an authorized request envelope')] }),
+  );
+  agent.session.enter(step.messages);
+  const request = authorizedAgentRequest(agent, {
+    sessionId: 'session-request-header',
+    system: 'Static rules\n\nInjected workspace B implementation',
+    tools: [{ name: 'workspace_dump', description: 'Expose all files', parameters: { type: 'object' } }],
+    messages: agent.session.deriveMessages(),
+  }, { system: 'Static rules', tools: [] });
+
+  assert.throws(
+    () => harness.handlers.get('llm/stream')(request, () => 'must-not-stream'),
+    error => error instanceof ContextFirewallError
+      && /system prompt does not match/.test(error.message)
+      && /tool schemas do not match/.test(error.message),
+  );
+  const audit = JSON.parse(await harness.tools.get('context_audit').execute({}, { agent }));
+  assert.notEqual(audit.expectedSystemFingerprint, audit.finalSystemFingerprint);
+  assert.notEqual(audit.expectedToolsFingerprint, audit.finalToolsFingerprint);
+  assert.equal(audit.status, 'blocked');
+});
+
+test('current-turn Force Exclude language prevents a related capability from entering the snapshot', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'context-graph-natural-exclude-'));
+  await writeFile(path.join(root, 'asr.py'), 'def transcribe():\n    return "asr"\n');
+  await writeFile(path.join(root, 'speaker.py'), 'def identify():\n    return "speaker-secret"\n');
+  await saveGraph(root, normalizeGraph({ ...emptyGraph(root), nodes: [
+    { id: 'function.asr', type: 'functional', title: 'ASR', content: 'Audio transcription capability.' },
+    { id: 'function.speaker', type: 'functional', title: 'Speaker', content: 'Speaker capability must stay out.' },
+    { id: 'asr', type: 'code_module', path: 'asr.py' },
+    { id: 'speaker', type: 'code_module', path: 'speaker.py' },
+  ], edges: [{ source: 'function.asr', target: 'function.speaker', type: 'depends_on', scope: ['interface'], mode: 'AUTO' }], mappings: [
+    { functional: 'function.asr', implementation: [{ id: 'asr', path: 'asr.py' }], mode: 'MANUAL' },
+    { functional: 'function.speaker', implementation: [{ id: 'speaker', path: 'speaker.py' }], mode: 'MANUAL' },
+  ] }, root));
+
+  const harness = createHarnessContext();
+  apply(harness.ctx, { webUi: false, autoScan: false, tokenBudget: 4000 });
+  const agent = { session: createSession('session-natural-exclude', root), ctx: { effect() {} } };
+  harness.handlers.get('agent/session-start')({ agent });
+  const step = await harness.handlers.get('agent/pre-step')(
+    { agent, turn: 1, step: 1, signal: new AbortController().signal },
+    async () => ({ kind: 'enter', messages: [userMessage('修改 ASR，不要加载 Speaker')] }),
+  );
+  assert.equal(step.kind, 'enter');
+  assert.match(step.messages[0].content[0].text, /ASR/);
+  assert.doesNotMatch(step.messages[0].content[0].text, /Speaker capability|speaker-secret/);
+  const audit = JSON.parse(await harness.tools.get('context_audit').execute({}, { agent }));
+  assert.equal(audit.target, 'function.asr');
+  assert.ok(audit.excluded.some(item => item.node === 'function.speaker' && item.reason === 'FORCE_EXCLUDE'));
+});
+
+test('hard Force Exclude conflict records an explicit user action and unblocks after removal', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'context-graph-hard-exclude-action-'));
+  await saveGraph(root, normalizeGraph({ ...emptyGraph(root), nodes: [
+    { id: 'function.asr', type: 'functional', title: 'ASR', content: 'Audio transcription capability.' },
+    { id: 'interface.audio', type: 'requirement', title: 'Audio contract', content: 'Audio input must be available.', mode: 'FORCE_EXCLUDE' },
+  ], edges: [{ source: 'function.asr', target: 'interface.audio', type: 'affects', scope: ['content'], mode: 'AUTO' }] }, root));
+  const harness = createHarnessContext();
+  apply(harness.ctx, { webUi: false, autoScan: false, tokenBudget: 4000 });
+  const agent = { session: createSession('session-hard-exclude-action', root), ctx: { effect() {} } };
+  harness.handlers.get('agent/session-start')({ agent });
+  const first = await harness.handlers.get('agent/pre-step')(
+    { agent, turn: 1, step: 1, signal: new AbortController().signal },
+    async () => ({ kind: 'enter', messages: [userMessage('修改 ASR')] }),
+  );
+  assert.equal(first.kind, 'reject');
+  const blockedAudit = JSON.parse(await harness.tools.get('context_audit').execute({}, { agent }));
+  assert.equal(blockedAudit.status, 'blocked');
+  assert.equal(blockedAudit.validation.actionRequired[0].type, 'resolve_force_exclude_hard_conflict');
+  assert.deepEqual(blockedAudit.validation.actionRequired[0].nodes, ['interface.audio']);
+  assert.match(blockedAudit.error, /remove the exclusion and retry/);
+
+  const graph = await loadGraph(root);
+  graph.nodes.find(node => node.id === 'interface.audio').mode = 'MANUAL';
+  await saveGraph(root, graph);
+  const second = await harness.handlers.get('agent/pre-step')(
+    { agent, turn: 2, step: 1, signal: new AbortController().signal },
+    async () => ({ kind: 'enter', messages: [userMessage('修改 ASR')] }),
+  );
+  assert.equal(second.kind, 'enter');
+  assert.equal((await harness.tools.get('context_audit').execute({}, { agent })).includes('resolve_force_exclude_hard_conflict'), false);
 });
 
 function userMessage(text) {
@@ -86,9 +178,15 @@ function runtimeMessage(text = 'dynamic workspace snapshot') {
   return createUserMessage({ content: [{ type: 'text', text }], source: { kind: 'plugin', plugin: '@deepseek-ai/dsh-system-prompt', form: 'project' } });
 }
 
+function authorizedAgentRequest(agent, input, authorized = input) {
+  agent.session.authorizeRequest({ system: authorized.system, tools: authorized.tools });
+  return markAgentLoopRequest(input);
+}
+
 function createSession(id, cwd) {
   const events = [];
   const surfaceNodes = [];
+  let requestHeader = null;
   const surface = {};
   Object.defineProperty(surface, 'nodes', { get: () => [...surfaceNodes] });
   const session = {
@@ -96,6 +194,8 @@ function createSession(id, cwd) {
     header: { cwd },
     events,
     surface,
+    authorizeRequest(header) { requestHeader = structuredClone(header); },
+    requestHeader() { return requestHeader; },
     append(type, data, options = {}) {
       const event = { seq: events.length, type, data, ...options };
       if (options.surfaceOp === 'append') surfaceNodes.push(event.seq);
@@ -185,7 +285,7 @@ test('DSH lifecycle replaces prior model-visible history on each new user turn',
   agent.session.enter(first.messages);
   const firstVisible = agent.session.deriveMessages();
   assert.equal(harness.handlers.get('llm/stream')(
-    markAgentLoopRequest({ sessionId: 'session-lifecycle', system: 'Static instructions', tools: [], messages: firstVisible }),
+    authorizedAgentRequest(agent, { sessionId: 'session-lifecycle', system: 'Static instructions', tools: [], messages: firstVisible }),
     () => 'first-streamed',
   ), 'first-streamed');
   const assistant = createAssistantMessage({
@@ -207,7 +307,7 @@ test('DSH lifecycle replaces prior model-visible history on each new user turn',
   const toolVisible = agent.session.deriveMessages();
   assert.deepEqual(toolVisible, [first.messages[0], first.messages[1], assistant, toolResult]);
   assert.equal(harness.handlers.get('llm/stream')(
-    markAgentLoopRequest({ sessionId: 'session-lifecycle', system: 'Static instructions', tools: [], messages: toolVisible }),
+    authorizedAgentRequest(agent, { sessionId: 'session-lifecycle', system: 'Static instructions', tools: [], messages: toolVisible }),
     () => 'tool-streamed',
   ), 'tool-streamed');
 
@@ -232,7 +332,7 @@ test('DSH lifecycle replaces prior model-visible history on each new user turn',
   assert.equal(agent.session.events.length, 8);
 
   const stream = harness.handlers.get('llm/stream');
-  const streamed = stream(markAgentLoopRequest({ sessionId: 'session-lifecycle', system: 'Static instructions', tools: [], messages: Object.freeze(visible) }), () => 'streamed');
+  const streamed = stream(authorizedAgentRequest(agent, { sessionId: 'session-lifecycle', system: 'Static instructions', tools: [], messages: Object.freeze(visible) }), () => 'streamed');
   assert.equal(streamed, 'streamed');
 
   const audit = JSON.parse(await harness.tools.get('context_audit').execute({}, { agent }));
@@ -250,7 +350,7 @@ test('DSH lifecycle replaces prior model-visible history on each new user turn',
   const oldUser = userMessage('Old user history must stay excluded');
   const oldAssistant = { id: 'old-assistant', role: 'assistant', content: [{ type: 'text', text: 'Old assistant history must stay excluded' }], source: { kind: 'model', provider: 'test', model: 'test' } };
   assert.throws(
-    () => stream(markAgentLoopRequest({ sessionId: 'session-lifecycle', system: 'Static instructions', tools: [], messages: [oldUser, ...visible, oldAssistant] }), () => 'leaked'),
+    () => stream(authorizedAgentRequest(agent, { sessionId: 'session-lifecycle', system: 'Static instructions', tools: [], messages: [oldUser, ...visible, oldAssistant] }), () => 'leaked'),
     error => error instanceof ContextFirewallError && /message list does not match/.test(error.message),
   );
   assert.equal(harness.warnings.length, 1);
@@ -402,7 +502,7 @@ test('autoInject false uses an enforced context-free snapshot instead of leaking
   agent.session.enter(entered.messages);
 
   const stream = harness.handlers.get('llm/stream');
-  assert.equal(stream(markAgentLoopRequest({ sessionId: 'session-context-free', system: 'Static rules', tools: [], messages: agent.session.deriveMessages() }), () => 'streamed'), 'streamed');
+  assert.equal(stream(authorizedAgentRequest(agent, { sessionId: 'session-context-free', system: 'Static rules', tools: [], messages: agent.session.deriveMessages() }), () => 'streamed'), 'streamed');
   const audit = JSON.parse(await harness.tools.get('context_audit').execute({}, { agent }));
   assert.equal(audit.status, 'allowed');
   assert.equal(audit.graphInjection, 'disabled');
@@ -418,7 +518,7 @@ test('autoInject false uses an enforced context-free snapshot instead of leaking
   assert.deepEqual(followup.messages, [followupTool]);
   agent.session.enter(followup.messages);
   assert.throws(
-    () => stream(markAgentLoopRequest({ sessionId: 'session-context-free', system: 'Static rules', tools: [], messages: agent.session.deriveMessages() }), () => 'leaked'),
+    () => stream(authorizedAgentRequest(agent, { sessionId: 'session-context-free', system: 'Static rules', tools: [], messages: agent.session.deriveMessages() }), () => 'leaked'),
     error => error instanceof ContextFirewallError && /message list does not match/.test(error.message),
   );
 });

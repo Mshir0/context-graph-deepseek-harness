@@ -11,6 +11,7 @@ import {
   buildContextManifest,
   classifyContextCandidate,
   estimateContextTokens,
+  resolveContextPolicy,
 } from './context-policy.js';
 
 const execFileAsync = promisify(execFile);
@@ -357,6 +358,34 @@ function taskTextIncludes(task, content) {
 function taskTerms(task) {
   return String(task || '').toLowerCase().match(/[a-z_][a-z0-9_.:-]{2,}|[\u4e00-\u9fff]{2,}/g) || [];
 }
+function contextPolicyFor(graphPolicy = {}, override = {}) {
+  const base = resolveContextPolicy(graphPolicy);
+  return resolveContextPolicy({
+    ...base,
+    ...override,
+    conversation: { ...base.conversation, ...(override.conversation || {}) },
+    rawLogs: { ...base.rawLogs, ...(override.rawLogs || {}) },
+    functionalDependencies: { ...base.functionalDependencies, ...(override.functionalDependencies || {}) },
+    interfaces: { ...base.interfaces, ...(override.interfaces || {}) },
+    implementation: { ...base.implementation, ...(override.implementation || {}) },
+    tests: { ...base.tests, ...(override.tests || {}) },
+    documentation: { ...base.documentation, ...(override.documentation || {}) },
+    history: { ...base.history, ...(override.history || {}) },
+  });
+}
+function boundedDepth(value, fallback, maximum = 3) {
+  return Number.isInteger(value) ? Math.max(0, Math.min(maximum, value)) : fallback;
+}
+function isImplementationNode(node) {
+  return node?.type === 'code_module' || node?.type?.startsWith('implementation_');
+}
+async function estimatedNodeTokens(root, node) {
+  const inline = node?.content || node?.description || '';
+  if (inline.trim()) return estimateTokens(inline);
+  if (!node?.path || (isImplementationNode(node) && !['code_module', 'implementation_file'].includes(node.type))) return 0;
+  try { return Math.ceil((await stat(projectFile(root, node.path))).size / 4); }
+  catch (error) { if (error.code === 'ENOENT') return 0; throw error; }
+}
 function implementationSymbolScore(node, terms) {
   const text = `${node.id} ${node.title || ''} ${node.label || ''} ${node.metadata?.signature || ''}`.toLowerCase();
   return terms.reduce((score, term) => score + (text.includes(term) ? 1 : 0), 0);
@@ -399,13 +428,14 @@ function rawContextTokens(graph) {
 
 function finalizeCompilation({ graph, entry, task, tokenBudget, candidates, excluded, forceExclude, policy }) {
   const allocation = allocateContextBudget(candidates, { tokenBudget, policy, preExcluded: excluded });
+  const compiledRawTokens = Math.max(rawContextTokens(graph), allocation.selectedTokens + allocation.excludedTokens);
   const manifest = buildContextManifest({
     task,
     target: entry,
     tokenBudget,
     allocation,
     forceExclude: [...forceExclude],
-    rawTokens: rawContextTokens(graph),
+    rawTokens: compiledRawTokens,
     graphRevision: contextGraphRevision(graph),
   });
   const context = allocation.included.map(item => `## ${item.label}\n\n${item.content}`).join('\n\n');
@@ -490,14 +520,22 @@ export async function compileContext(input) {
   }
   const history = await gitSummary(root, targetNode.path);
   add(400, `${target} relevant git history`, history.history.join('\n'), target, 'history');
-  return finalizeCompilation({ graph, entry: target, task, tokenBudget, candidates, excluded, forceExclude: forcedExclude, policy: { ...(graph.policy || {}), ...(input.policy || {}) } });
+  return finalizeCompilation({ graph, entry: target, task, tokenBudget, candidates, excluded, forceExclude: forcedExclude, policy: contextPolicyFor(graph.policy, input.policy) });
 }
 
 export async function compileModularContext({ projectPath, graph, entry, task = '', tokenBudget = 16000, include = [], exclude = [], maxImplementationFiles = 3, semanticDepth = 3, policy }) {
   const root = path.resolve(projectPath);
-  const implementationLimit = Number.isInteger(maxImplementationFiles) ? Math.max(1, Math.min(5, maxImplementationFiles)) : 3;
-  const semanticLimit = Number.isInteger(semanticDepth) ? Math.max(1, Math.min(3, semanticDepth)) : 3;
   const nodeMap = new Map(graph.nodes.map(node => [node.id, node]));
+  const resolvedPolicy = contextPolicyFor(graph.policy, policy);
+  const configuredImplementationLimit = Number.isInteger(maxImplementationFiles) ? Math.max(1, Math.min(5, maxImplementationFiles)) : 3;
+  const policyImplementationLimit = Number.isInteger(resolvedPolicy.implementation.maxFiles) ? Math.max(0, Math.min(5, resolvedPolicy.implementation.maxFiles)) : configuredImplementationLimit;
+  const implementationLimit = Math.min(configuredImplementationLimit, policyImplementationLimit);
+  const configuredSemanticLimit = Number.isInteger(semanticDepth) ? Math.max(1, Math.min(3, semanticDepth)) : 3;
+  const entryOffset = nodeMap.get(entry)?.type === 'task' ? 1 : 0;
+  const semanticLimit = Math.min(configuredSemanticLimit, entryOffset + boundedDepth(resolvedPolicy.functionalDependencies.depth, configuredSemanticLimit));
+  const interfaceLimit = entryOffset + boundedDepth(resolvedPolicy.interfaces.depth, semanticLimit - entryOffset);
+  const testLimit = entryOffset + boundedDepth(resolvedPolicy.tests.depth, semanticLimit - entryOffset);
+  const implementationDepth = boundedDepth(resolvedPolicy.implementation.depth, 1);
   if (!nodeMap.has(entry)) throw new Error(`Unknown context entry: ${entry}`);
   const forceInclude = new Set([...(graph.overrides?.include || []), ...include]);
   const forceExclude = new Set([...(graph.overrides?.exclude || []), ...exclude]);
@@ -525,6 +563,10 @@ export async function compileModularContext({ projectPath, graph, entry, task = 
       if (['dependency', 'reference', 'calls'].includes(edge.type) && currentNode?.type === 'functional') continue;
       const next = forward ? edge.target : edge.source;
       if (!next || !nodeMap.has(next) || forceExclude.has(next)) continue;
+      const nextNode = nodeMap.get(next);
+      const nextDepth = currentInfo.depth + 1;
+      if ((nextNode.type === 'interface' || edge.type === 'interface') && nextDepth > interfaceLimit) continue;
+      if ((nextNode.type === 'test' || edge.type === 'tests') && nextDepth > testLimit) continue;
       // Tasks are entry points. Do not pull old tasks back in through a shared target.
       if (nodeMap.get(next)?.type === 'task' && next !== entry) continue;
       // Explicit edge overrides are directional and outrank semantic traversal
@@ -552,8 +594,7 @@ export async function compileModularContext({ projectPath, graph, entry, task = 
       }
       if (currentNode?.type === 'functional' && (nodeMap.get(next)?.type === 'code_module' || nodeMap.get(next)?.type?.startsWith('implementation_'))) continue;
       if (!selected.has(next)) {
-        const nextNode = nodeMap.get(next);
-        selected.set(next, { depth: currentInfo.depth + 1, reason: `${edge.type} ${forward ? 'from' : 'to'} ${current}`, scope: edge.scope || [] });
+        selected.set(next, { depth: nextDepth, reason: `${edge.type} ${forward ? 'from' : 'to'} ${current}`, scope: edge.scope || [] });
         const expandable = nextNode.type === 'functional'
           || nextNode.type === 'task'
           || (edge.type === 'targets' && (nextNode.type === 'code_module' || nextNode.type?.startsWith('implementation_')));
@@ -589,10 +630,10 @@ export async function compileModularContext({ projectPath, graph, entry, task = 
   }
   // Resolve only task-relevant implementation after semantic traversal;
   // never expand file calls through the implementation graph.
-  for (const [id] of selectedFunctions) {
+  for (const [id, functionSelection] of implementationDepth > 0 ? selectedFunctions : []) {
     for (const implementation of implementationForFunctional(graph, id, task, implementationLimit)) {
       if (nodeMap.has(implementation.id) && !forceExclude.has(implementation.id) && !selected.has(implementation.id)) {
-        selected.set(implementation.id, { depth: 2, reason: `implemented_by ${id}`, scope: ['code', 'interface'] });
+        selected.set(implementation.id, { depth: functionSelection.depth + implementationDepth, reason: `implemented_by ${id}`, scope: ['code', 'interface'] });
       }
     }
   }
@@ -631,10 +672,11 @@ export async function compileModularContext({ projectPath, graph, entry, task = 
     });
   }
   const candidates = [];
-  const excluded = [...forceExclude].filter(id => nodeMap.has(id)).map(id => {
+  const excluded = [];
+  for (const id of [...forceExclude].filter(value => nodeMap.has(value))) {
     const node = nodeMap.get(id);
-    return { node: id, module: id, nodeType: node.type, status: node.status, source: contextSource(node, 'content'), policyClass: node.mode === 'FORCE_INCLUDE' ? 'hard' : undefined, reason: 'FORCE_EXCLUDE', tokens: estimateTokens(node.content || '') };
-  });
+    excluded.push({ node: id, module: id, nodeType: node.type, status: node.status, source: contextSource(node, 'content'), policyClass: node.mode === 'FORCE_INCLUDE' ? 'hard' : undefined, reason: 'FORCE_EXCLUDE', tokens: await estimatedNodeTokens(root, node) });
+  }
   const add = (priority, label, content, node, scope, reason, required = false, depth = 1) => {
     if (content?.trim()) candidates.push({ priority, priorityName: node.priority, label, content: content.trim(), module: node.id, node: node.id, nodeType: node.type, status: node.status, scope, reason, required, forceInclude: node.mode === 'FORCE_INCLUDE' || reason === 'FORCE_INCLUDE', source: contextSource(node, scope), depth });
   };
@@ -642,27 +684,35 @@ export async function compileModularContext({ projectPath, graph, entry, task = 
   add(950, 'Project rules', await optionalRead(path.join(root, '.context', 'project.md')), nodeMap.get(entry), 'project', 'project rule', true);
   for (const [id, selection] of selected) {
     const node = nodeMap.get(id);
+    const candidateStart = candidates.length;
     const currentFunctionalTarget = node.type === 'functional'
       && (id === entry || selection.reason.startsWith('targets ') || selection.reason.startsWith('functional mapping for task target '));
     if (forceExclude.has(id)) continue;
     if (node.status !== 'active' && !forceInclude.has(id)) {
-      const omitted = { node: id, module: id, nodeType: node.type, status: node.status, scope: 'content', source: contextSource(node, 'content'), reason: node.status, required: currentFunctionalTarget, tokens: estimateTokens(node.content || '') };
+      const omitted = { node: id, module: id, nodeType: node.type, status: node.status, scope: 'content', source: contextSource(node, 'content'), reason: node.status, required: currentFunctionalTarget, tokens: await estimatedNodeTokens(root, node) };
       omitted.policyClass = classifyContextCandidate(omitted);
       excluded.push(omitted);
       continue;
     }
-    if ((node.type === 'conversation' || node.metadata?.raw === true) && !forceInclude.has(id)) {
-      excluded.push({ node: id, module: id, nodeType: node.type, status: node.status, source: contextSource(node, 'content'), reason: 'raw source is trace-only', tokens: estimateTokens(node.content || '') });
+    const rawLog = node.metadata?.rawKind === 'log' || node.type === 'raw_log';
+    const rawConversation = !rawLog && (node.type === 'conversation' || node.metadata?.raw === true);
+    if (!forceInclude.has(id) && (rawLog && resolvedPolicy.rawLogs.enabled !== true || rawConversation && resolvedPolicy.conversation.enabled !== true)) {
+      excluded.push({ node: id, module: id, nodeType: node.type, status: node.status, source: contextSource(node, 'content'), reason: rawLog ? 'raw logs disabled by policy' : 'raw context disabled by policy', tokens: await estimatedNodeTokens(root, node) });
       continue;
     }
     const priority = node.priority === 'critical' ? 940 : node.priority === 'high' ? 900 : selection.depth === 0 ? 880 : 680 - selection.depth * 40;
     const duplicatedCurrentTask = id === entry && node.type === 'task' && taskTextIncludes(task, node.content);
-    if (node.content && node.type !== 'functional' && !duplicatedCurrentTask) add(priority, `${node.title} (${node.type})`, node.content, node, 'content', selection.reason, id === entry && node.type !== 'code_module', selection.depth);
+    if (!isImplementationNode(node) && node.type !== 'functional' && !duplicatedCurrentTask) {
+      const semanticContent = node.content || (node.path ? await optionalRead(projectFile(root, node.path)) : '');
+      const semanticScope = node.type === 'test' ? 'test' : node.type === 'interface' ? 'interface' : 'content';
+      add(priority, `${node.title} (${node.type})`, semanticContent, node, semanticScope, selection.reason, id === entry, selection.depth);
+    }
+    if (isImplementationNode(node) && node.content && !duplicatedCurrentTask) add(priority, `${node.title} (${node.type})`, node.content, node, 'content', selection.reason, id === entry, selection.depth);
     if (node.type === 'functional') {
       const detail = [node.description || node.content, node.provides?.length ? `Provides: ${node.provides.join(', ')}` : '', node.consumes?.length ? `Consumes: ${node.consumes.join(', ')}` : '', node.inputs?.length ? `Input: ${node.inputs.join(', ')}` : '', node.outputs?.length ? `Output: ${node.outputs.join(', ')}` : ''].filter(Boolean).join('\n');
       if (detail) add(priority, `${node.title} (functional)`, detail, node, 'content', selection.reason, currentFunctionalTarget, selection.depth);
     }
-    if (node.type === 'code_module' || node.type?.startsWith('implementation_')) {
+    if (isImplementationNode(node)) {
       const scopes = selection.scope.length ? selection.scope : id === entry ? ['code', 'context', 'interface', 'state', 'decisions'] : ['interface', 'contract'];
       for (const scope of scopes) {
         if (scope === 'content' || scope === 'contract') continue;
@@ -671,12 +721,17 @@ export async function compileModularContext({ projectPath, graph, entry, task = 
         if (file) add(priority + (scope === 'code' && id === entry ? 30 : 0), `${node.title} ${scope}`, content, node, scope, selection.reason, false, selection.depth);
       }
     }
+    if (candidates.length === candidateStart && !(node.type === 'task' && duplicatedCurrentTask)) {
+      const omitted = { node: id, module: id, nodeType: node.type, status: node.status, scope: 'content', source: contextSource(node, 'content'), reason: selected.has(id) && [...selected].some(([, value]) => value.reason === `task-relevant symbol in ${id}`) ? 'resolved to symbol-level implementation' : 'selected context source is empty', required: currentFunctionalTarget, tokens: await estimatedNodeTokens(root, node) };
+      omitted.policyClass = classifyContextCandidate(omitted);
+      excluded.push(omitted);
+    }
   }
   for (const node of graph.nodes) {
     if (selected.has(node.id) || forceExclude.has(node.id)) continue;
-    excluded.push({ node: node.id, module: node.id, nodeType: node.type, status: node.status, source: contextSource(node, 'content'), score: 0, tokens: estimateTokens(node.content || ''), reason: node.type === 'conversation' || node.metadata?.raw === true ? 'raw context disabled by policy' : 'not selected by semantic traversal' });
+    excluded.push({ node: node.id, module: node.id, nodeType: node.type, status: node.status, source: contextSource(node, 'content'), score: 0, tokens: await estimatedNodeTokens(root, node), reason: node.type === 'conversation' || node.metadata?.raw === true ? 'raw context disabled by policy' : 'not selected by semantic traversal' });
   }
-  return finalizeCompilation({ graph, entry, task, tokenBudget, candidates, excluded, forceExclude, policy: { ...(graph.policy || {}), ...(policy || {}) } });
+  return finalizeCompilation({ graph, entry, task, tokenBudget, candidates, excluded, forceExclude, policy: resolvedPolicy });
 }
 
 export async function listProjects(parentPath) {

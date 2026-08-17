@@ -204,6 +204,7 @@ export function validateCompiledContext({
   const resolvedPolicy = resolveContextPolicy(policy);
   const errors = [];
   const warnings = [];
+  const actionRequired = [];
   const forced = new Set(forceExclude);
   const ids = new Set();
   const hashes = new Set();
@@ -224,11 +225,24 @@ export function validateCompiledContext({
   }
 
   const forceExcludedHard = excluded.filter(item => item.policyClass === 'hard' && item.reason === 'FORCE_EXCLUDE');
-  if (forceExcludedHard.length) errors.push({ code: 'FORCE_EXCLUDE_HARD_CONFLICT', nodes: forceExcludedHard.map(item => item.node || item.module).filter(Boolean), message: 'Force Exclude conflicts with required Hard Context.' });
+  if (forceExcludedHard.length) {
+    const nodes = forceExcludedHard.map(item => item.node || item.module).filter(Boolean);
+    const message = `Force Exclude blocks required Hard Context (${nodes.join(', ')}). Confirm whether to remove the exclusion and retry, or keep it and cancel this task.`;
+    errors.push({ code: 'FORCE_EXCLUDE_HARD_CONFLICT', nodes, message });
+    actionRequired.push({
+      type: 'resolve_force_exclude_hard_conflict',
+      nodes,
+      message,
+      options: [
+        { id: 'remove_exclusion_and_retry', label: 'Remove Force Exclude and retry' },
+        { id: 'keep_exclusion_and_cancel', label: 'Keep Force Exclude and cancel this task' },
+      ],
+    });
+  }
   const omittedHard = excluded.filter(item => item.policyClass === 'hard' && item.reason !== 'FORCE_EXCLUDE');
   if (omittedHard.length) errors.push({ code: 'MISSING_HARD_CONTEXT', nodes: omittedHard.map(item => item.node || item.module).filter(Boolean), message: 'One or more Hard Context items were omitted.' });
 
-  return { valid: errors.length === 0, errors, warnings, selectedTokens, checkedAt: new Date().toISOString() };
+  return { valid: errors.length === 0, errors, warnings, actionRequired, selectedTokens, checkedAt: new Date().toISOString() };
 }
 
 export function buildContextManifest({

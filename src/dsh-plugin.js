@@ -9,7 +9,7 @@ import {
   saveGraph,
 } from './core.js';
 import { registerContextGraphRoutes } from './dsh-routes.js';
-import { inferTarget, latestUserText, preview } from './dsh-context.js';
+import { inferTarget, inferTurnExclusions, latestUserText, preview } from './dsh-context.js';
 import {
   auditFinalRequest,
   ContextFirewallError,
@@ -75,7 +75,7 @@ export function apply(ctx, input = {}) {
 
   ctx.on('agent/session-start', ({ agent }) => {
     const key = String(agent.session.id);
-    sessionState.set(key, { ...(sessionState.get(key) || {}), projectPath: agent.session.header?.cwd || '' });
+    sessionState.set(key, { ...(sessionState.get(key) || {}), agent, projectPath: agent.session.header?.cwd || '' });
     agent.ctx.effect(() => () => sessionState.delete(key), 'contextGraph.disposeSession()');
   });
 
@@ -154,7 +154,7 @@ export function apply(ctx, input = {}) {
         allowRawConversation: config.contextPolicy?.conversation?.enabled === true,
         validate: typeof config.validateContext === 'function' ? config.validateContext : undefined,
       });
-      if (!validation.valid) throw new ContextFirewallError(validation.errors.join('; '));
+      if (!validation.valid) throw new ContextFirewallError(validation.errors.join('; '), 'CONTEXT_VALIDATION_FAILED', { actionRequired: validation.actionRequired });
       if (signal.aborted) return decision;
       const reusableFingerprint = `${compiled.target}\0${compiled.result.reusableContextFingerprint || ''}`;
       const contextReused = settings.reuseContext === true
@@ -181,7 +181,14 @@ export function apply(ctx, input = {}) {
       if (placement.action === 'prepend' || placement.action === 'audit-prepend') return { kind: 'enter', messages: [snapshot, ...outputMessages] };
       return { kind: 'enter', messages: outputMessages };
     } catch (error) {
-      const audit = createContextAudit({ status: 'blocked', mode: config.firewallMode, turn, step, task, target: compiled?.target || null, result: compiled?.result, validation, raw: { ...rawContext, graphRawTokens: compiled?.result?.rawTokens || 0 }, stepMessages: decision.messages.length, allowedStepMessages: allowedMessages.length, error: error.message || String(error) });
+      const blockedValidation = validation || {
+        valid: false,
+        errors: [error.message || String(error)],
+        warnings: [],
+        details: [{ code: error.code || 'CONTEXT_FIREWALL_BLOCKED', message: error.message || String(error) }],
+        actionRequired: Array.isArray(error.actionRequired) ? error.actionRequired : [],
+      };
+      const audit = createContextAudit({ status: 'blocked', mode: config.firewallMode, turn, step, task, target: compiled?.target || null, result: compiled?.result, validation: blockedValidation, raw: { ...rawContext, graphRawTokens: compiled?.result?.rawTokens || 0 }, stepMessages: decision.messages.length, allowedStepMessages: allowedMessages.length, error: error.message || String(error) });
       sessionState.set(key, { ...state, lastAudit: audit });
       ctx.logger.warn(`context-graph: request blocked by Context Firewall: ${error.message || String(error)}`);
       return config.firewallMode === 'enforce' ? { kind: 'reject' } : decision;
@@ -202,6 +209,7 @@ export function apply(ctx, input = {}) {
       requestTokenBudget: config.requestTokenBudget,
       outputReserveTokens: config.outputReserveTokens,
       tokenSafetyRatio: config.tokenSafetyRatio,
+      authorizedRequestHeader: requestHeaderOf(state?.agent?.session),
     });
     sessionState.set(key, { ...(state || {}), lastAudit: audit });
     if (config.firewallMode === 'enforce' && !audit.validation.valid) {
@@ -518,15 +526,33 @@ async function compileStepContext(agent, task, config, selected, signal) {
   }
   if (signal.aborted) throw new ContextFirewallError('Context compilation was aborted', 'CONTEXT_ABORTED');
   if (graph.nodes.length === 0) throw new ContextFirewallError('Context Graph has no nodes', 'CONTEXT_GRAPH_EMPTY');
-  const target = selected.target && graph.nodes.some(node => node.id === selected.target) ? selected.target : inferTarget(task, graph.nodes);
+  const turnExclusions = inferTurnExclusions(task, graph.nodes);
+  if (turnExclusions.ambiguous.length) {
+    const candidates = [...new Set(turnExclusions.ambiguous.flatMap(item => item.candidates))];
+    const aliases = turnExclusions.ambiguous.map(item => item.alias);
+    const message = `Force Exclude is ambiguous for ${aliases.join(', ')}. Select an exact Context Graph node before retrying.`;
+    throw new ContextFirewallError(message, 'CONTEXT_FORCE_EXCLUDE_AMBIGUOUS', {
+      actionRequired: [{
+        type: 'clarify_force_exclude_target',
+        aliases,
+        candidates,
+        message,
+        options: candidates.map(id => ({ id, label: `Exclude ${id}` })),
+      }],
+    });
+  }
+  const effectiveExclude = [...new Set([...selected.exclude, ...turnExclusions.exclude])];
+  const target = selected.target && graph.nodes.some(node => node.id === selected.target)
+    ? selected.target
+    : inferTarget(task, graph.nodes, { exclude: effectiveExclude });
   if (target === null) throw new ContextFirewallError('Unable to infer a Context Graph target; select a task target before retrying', 'CONTEXT_TARGET_REQUIRED');
-  const result = await compileContext({ projectPath: root, graph, entry: target, target, task, tokenBudget: selected.tokenBudget, maxImplementationFiles: selected.maxImplementationFiles, semanticDepth: selected.semanticDepth, include: selected.include, exclude: selected.exclude, policy: config.contextPolicy });
+  const result = await compileContext({ projectPath: root, graph, entry: target, target, task, tokenBudget: selected.tokenBudget, maxImplementationFiles: selected.maxImplementationFiles, semanticDepth: selected.semanticDepth, include: selected.include, exclude: effectiveExclude, policy: config.contextPolicy });
   const forceExclude = [...new Set([
     ...(graph.overrides?.exclude || []),
-    ...selected.exclude,
+    ...effectiveExclude,
     ...graph.nodes.filter(node => node.mode === 'FORCE_EXCLUDE').map(node => node.id),
   ])];
-  return { result, target, forceExclude };
+  return { result, target, forceExclude, turnExclusions: turnExclusions.exclude };
 }
 
 function firewallTurnKey(turn, messages) {
@@ -591,6 +617,11 @@ function workspaceOf(exec) {
   const cwd = exec.agent?.session?.header?.cwd;
   if (typeof cwd !== 'string' || cwd.length === 0) throw new Error('Context Graph requires a DSH session workspace');
   return cwd;
+}
+
+function requestHeaderOf(session) {
+  try { return typeof session?.requestHeader === 'function' ? session.requestHeader() : null; }
+  catch { return null; }
 }
 function sessionKey(exec) {
   if (!exec.agent?.session?.id) throw new Error('Context Graph requires a calling DSH agent');

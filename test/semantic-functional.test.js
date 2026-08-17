@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { compileContext, emptyGraph, normalizeGraph, validateGraph } from '../src/core.js';
+import { applyContextInvalidation } from '../src/project-analysis.js';
 import { applyFunctionalInference, inferFunctionalModules, mergeFunctionalNodes, splitFunctionalNode } from '../src/semantic-functional.js';
 
 function implementationGraph(root) {
@@ -52,6 +53,114 @@ test('twenty unrelated files in one capability directory infer one functional no
   assert.equal(proposal.nodes.length, 1);
   assert.equal(proposal.nodes[0].id, 'function.asr');
   assert.equal(proposal.mappings[0].implementation.length, 20);
+});
+
+test('re-inference restores stale automatic semantics without overwriting manual ownership', () => {
+  const root = '/tmp/semantic-revalidation';
+  let graph = applyFunctionalInference(implementationGraph(root), inferFunctionalModules(implementationGraph(root), facts));
+  const automatic = graph.nodes.find(node => node.id === 'function.asr');
+  automatic.metadata.invalidation_status = 'stale';
+  automatic.metadata.invalidated_by = ['src/asr/asr.py'];
+  automatic.metadata.invalidated_at = '2026-01-01T00:00:00.000Z';
+  const manual = graph.nodes.find(node => node.id === 'function.speaker');
+  manual.mode = 'MANUAL';
+  manual.title = 'User-owned speaker capability';
+  const manualMapping = graph.mappings.find(mapping => mapping.functional === 'function.speaker');
+  manualMapping.mode = 'MANUAL';
+
+  graph = applyContextInvalidation(graph, {
+    changed: ['src/asr/asr.py', 'src/speaker/tracker.py'],
+    invalidated: { files: ['src/asr/asr.py', 'src/speaker/tracker.py'], modules: ['asr', 'speaker'], symbols: [], interfaces: [] },
+  });
+  assert.equal(graph.nodes.find(node => node.id === 'function.asr').status, 'stale');
+  assert.equal(graph.mappings.find(mapping => mapping.functional === 'function.asr').metadata.status, 'stale');
+  assert.equal(graph.nodes.find(node => node.id === 'function.speaker').metadata.invalidation_status, 'review_required');
+  assert.equal(graph.mappings.find(mapping => mapping.functional === 'function.speaker').metadata.status, 'review_required');
+
+  const proposal = inferFunctionalModules(graph, facts);
+  graph = applyFunctionalInference(graph, proposal);
+  const restored = graph.nodes.find(node => node.id === 'function.asr');
+  const restoredMapping = graph.mappings.find(mapping => mapping.functional === 'function.asr');
+  assert.equal(restored.status, 'active');
+  assert.equal(restored.metadata.invalidation_status, undefined);
+  assert.equal(restored.metadata.invalidated_by, undefined);
+  assert.equal(restored.metadata.invalidated_at, undefined);
+  assert.equal(restoredMapping.metadata.status, undefined);
+  assert.equal(restoredMapping.metadata.invalidated_by, undefined);
+  assert.equal(restoredMapping.metadata.invalidated_at, undefined);
+  assert.deepEqual(restoredMapping.evidence.sort(), ['src/asr/asr.py', 'src/asr/decoder.py', 'src/asr/timestamp.py', 'src/asr/whisper.py']);
+
+  const preservedManual = graph.nodes.find(node => node.id === 'function.speaker');
+  const preservedManualMapping = graph.mappings.find(mapping => mapping.functional === 'function.speaker');
+  assert.equal(preservedManual.title, 'User-owned speaker capability');
+  assert.equal(preservedManual.metadata.invalidation_status, 'review_required');
+  assert.equal(preservedManualMapping.metadata.status, 'review_required');
+});
+
+test('re-inference never restores a capability from deleted implementation evidence', () => {
+  const root = '/tmp/semantic-deleted-evidence';
+  const base = normalizeGraph({ ...emptyGraph(root), nodes: [
+    { id: 'service', type: 'code_module', path: 'src/service/service.py' },
+  ], edges: [] }, root);
+  let graph = applyFunctionalInference(base, inferFunctionalModules(base));
+  graph.nodes.find(node => node.id === 'service').status = 'stale';
+  graph = applyContextInvalidation(graph, {
+    deleted: ['src/service/service.py'],
+    invalidated: { files: ['src/service/service.py'], modules: ['service'], symbols: [], interfaces: [] },
+  });
+
+  const proposal = inferFunctionalModules(graph);
+  assert.equal(proposal.mappings.length, 0);
+  graph = applyFunctionalInference(graph, proposal);
+  assert.equal(graph.nodes.find(node => node.id === 'function.service').status, 'stale');
+  assert.equal(graph.mappings.find(mapping => mapping.functional === 'function.service').metadata.status, 'stale');
+});
+
+test('re-inference replaces one inferred mapping when implementation membership changes', () => {
+  const root = '/tmp/semantic-membership';
+  const base = normalizeGraph({ ...emptyGraph(root), nodes: [
+    { id: 'service.a', type: 'code_module', path: 'src/service/a.py' },
+    { id: 'service.b', type: 'code_module', path: 'src/service/b.py' },
+  ], edges: [] }, root);
+  let graph = applyFunctionalInference(base, inferFunctionalModules(base));
+  graph.nodes.push({ id: 'service.c', type: 'code_module', path: 'src/service/c.py', status: 'active' });
+  graph = applyFunctionalInference(graph, inferFunctionalModules(graph));
+  let mappings = graph.mappings.filter(mapping => mapping.functional === 'function.service');
+  assert.equal(mappings.length, 1);
+  assert.deepEqual(mappings[0].implementation.map(item => item.id).sort(), ['service.a', 'service.b', 'service.c']);
+
+  graph.nodes.find(node => node.id === 'service.b').status = 'stale';
+  graph = applyContextInvalidation(graph, {
+    deleted: ['src/service/b.py'],
+    invalidated: { files: ['src/service/b.py'], modules: ['service.b'], symbols: [], interfaces: [] },
+  });
+  graph = applyFunctionalInference(graph, inferFunctionalModules(graph));
+  mappings = graph.mappings.filter(mapping => mapping.functional === 'function.service');
+  assert.equal(mappings.length, 1);
+  assert.deepEqual(mappings[0].implementation.map(item => item.id).sort(), ['service.a', 'service.c']);
+  assert.equal(mappings[0].metadata.status, undefined);
+  assert.equal(graph.nodes.find(node => node.id === 'function.service').status, 'active');
+});
+
+test('manual mapping ownership blocks an inferred membership expansion', () => {
+  const root = '/tmp/semantic-manual-membership';
+  const graph = normalizeGraph({ ...emptyGraph(root), nodes: [
+    { id: 'service.a', type: 'code_module', path: 'src/service/a.py' },
+    { id: 'service.b', type: 'code_module', path: 'src/service/b.py' },
+    { id: 'function.service', type: 'functional', title: 'User Service', mode: 'MANUAL' },
+  ], edges: [], mappings: [{
+    functional: 'function.service',
+    implementation: [{ id: 'service.a', path: 'src/service/a.py' }],
+    mode: 'MANUAL',
+  }] }, root);
+
+  const next = applyFunctionalInference(graph, inferFunctionalModules(graph));
+  const mappings = next.mappings.filter(mapping => mapping.functional === 'function.service');
+  assert.equal(mappings.length, 1);
+  assert.deepEqual(mappings[0].implementation.map(item => item.id), ['service.a']);
+  assert.equal(mappings[0].metadata.status, 'review_required');
+  assert.equal(next.nodes.find(node => node.id === 'function.service').title, 'User Service');
+  assert.equal(next.nodes.find(node => node.id === 'function.service').metadata.invalidation_status, 'review_required');
 });
 
 test('compiler follows semantic context then narrows to task-relevant implementation', async () => {
