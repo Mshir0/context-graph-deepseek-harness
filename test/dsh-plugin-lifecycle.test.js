@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { createAssistantMessage, createUserMessage, markAgentLoopRequest } from '@deepseek-ai/dsh-llm';
@@ -355,6 +355,191 @@ test('DSH lifecycle replaces prior model-visible history on each new user turn',
   );
   assert.equal(harness.warnings.length, 1);
   assert.equal(disposers.length, 1);
+});
+
+test('project context persists across sessions and plugin restarts without leaking session state or raw history', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'context-graph-cross-session-'));
+  await writeFile(path.join(root, 'request_id.py'), [
+    'def attach_request_id(response, request_id):',
+    '    response.headers["x-request-id"] = request_id',
+    '    return response',
+  ].join('\n'));
+
+  const firstHarness = createHarnessContext();
+  apply(firstHarness.ctx, { webUi: false, autoScan: false });
+  const firstDisposers = [];
+  const firstAgent = {
+    session: createSession('session-persistence-a', root),
+    ctx: { effect(effect) { firstDisposers.push(effect()); } },
+  };
+  firstHarness.handlers.get('agent/session-start')({ agent: firstAgent });
+
+  await firstHarness.tools.get('context_graph_scan').execute({}, { agent: firstAgent });
+  const initialCache = await loadFactsCache(root);
+  assert.ok(initialCache?.files['request_id.py']);
+  const initialProjectMemory = await readFile(path.join(root, '.context', 'project.md'), 'utf8');
+  const initialModuleMemory = await readFile(path.join(root, '.context', 'modules', 'request_id', 'interface.md'), 'utf8');
+
+  const durableNodes = [
+    { id: 'function.request_id_durability', type: 'functional', title: 'Request ID durability', content: 'Preserve one request identifier across request state and response headers.' },
+    { id: 'requirement.request_id_echo', type: 'requirement', title: 'Echo Request ID', content: 'The response header must echo the request identifier stored in request state.' },
+    { id: 'constraint.request_id_api', type: 'constraint', title: 'Keep public API stable', content: 'Do not change the public Request, Response, or Router interfaces.' },
+    { id: 'decision.request_id_header', type: 'decision', title: 'Use X-Request-ID', content: 'Use X-Request-ID as the canonical transport header.' },
+    { id: 'task.request_id_initial', type: 'task', title: 'Initial Request ID task', content: 'Implement the initial Request ID middleware behavior.' },
+    { id: 'function.unrelated', type: 'functional', title: 'Unrelated reporting', content: 'This unrelated capability must not be selected for Request ID work.' },
+  ];
+  for (const node of durableNodes) {
+    await firstHarness.tools.get('context_graph_add_node').execute({ node_json: JSON.stringify(node) }, { agent: firstAgent });
+  }
+  await firstHarness.tools.get('context_extract').execute({
+    text: 'RAW_SESSION_A_ONLY_7F3C',
+    source: 'user',
+    conversation_id: 'conversation-session-a',
+    message_id: 'message-session-a',
+    apply: true,
+  }, { agent: firstAgent });
+
+  const durableEdges = [
+    { source: 'function.request_id_durability', target: 'requirement.request_id_echo', type: 'requires', scope: ['content'], mode: 'MANUAL' },
+    { source: 'function.request_id_durability', target: 'constraint.request_id_api', type: 'constrained_by', scope: ['content'], mode: 'MANUAL' },
+    { source: 'function.request_id_durability', target: 'decision.request_id_header', type: 'applies_to', scope: ['content'], mode: 'MANUAL' },
+    { source: 'task.request_id_initial', target: 'function.request_id_durability', type: 'targets', scope: ['content', 'code'], mode: 'MANUAL' },
+  ];
+  for (const edge of durableEdges) {
+    await firstHarness.tools.get('context_graph_add_edge').execute({ edge_json: JSON.stringify(edge) }, { agent: firstAgent });
+  }
+  await firstHarness.tools.get('functional_map_implementation').execute({
+    functional: 'function.request_id_durability',
+    implementation_ids: ['request_id'],
+    mode: 'MANUAL',
+  }, { agent: firstAgent });
+
+  await firstHarness.tools.get('context_select').execute({
+    target: 'function.request_id_durability',
+    include: ['decision.request_id_header'],
+    exclude: ['function.unrelated'],
+  }, { agent: firstAgent });
+  await firstHarness.tools.get('context_session_config').execute({
+    token_budget: 2000,
+    reuse_context: false,
+    max_implementation_files: 1,
+    semantic_depth: 1,
+  }, { agent: firstAgent });
+
+  const firstTurn = await firstHarness.handlers.get('agent/pre-step')(
+    { agent: firstAgent, turn: 1, step: 1, signal: new AbortController().signal },
+    async () => ({ kind: 'enter', messages: [userMessage('SESSION_A_SURFACE_ONLY: update Request ID durability')] }),
+  );
+  assert.equal(firstTurn.kind, 'enter');
+  firstAgent.session.enter(firstTurn.messages);
+  assert.equal(firstDisposers.length, 1);
+
+  const secondDisposers = [];
+  const secondAgent = {
+    session: createSession('session-persistence-b', root),
+    ctx: { effect(effect) { secondDisposers.push(effect()); } },
+  };
+  firstHarness.handlers.get('agent/session-start')({ agent: secondAgent });
+  const secondAuditBeforeTurn = JSON.parse(await firstHarness.tools.get('context_audit').execute({}, { agent: secondAgent }));
+  assert.equal(secondAuditBeforeTurn.status, 'unavailable');
+  const secondSettings = JSON.parse(await firstHarness.tools.get('context_session_config').execute({}, { agent: secondAgent }));
+  assert.deepEqual(secondSettings, {
+    autoInject: true,
+    tokenBudget: 6000,
+    reuseContext: true,
+    maxImplementationFiles: 2,
+    semanticDepth: 2,
+    target: null,
+    include: [],
+    exclude: [],
+  });
+
+  const graphInSecondSession = JSON.parse(await firstHarness.tools.get('context_graph_get').execute({}, { agent: secondAgent }));
+  assert.ok(graphInSecondSession.nodes.some(node => node.id === 'function.request_id_durability'));
+  assert.ok(graphInSecondSession.nodes.some(node => node.id === 'message-session-a' && node.metadata?.raw === true));
+  assert.ok(!graphInSecondSession.nodes.some(node => node.content?.includes('SESSION_A_SURFACE_ONLY')));
+  assert.ok(graphInSecondSession.edges.some(edge => edge.source === 'function.request_id_durability' && edge.target === 'requirement.request_id_echo' && edge.mode === 'MANUAL'));
+  assert.ok(graphInSecondSession.mappings.some(mapping => mapping.functional === 'function.request_id_durability' && mapping.mode === 'MANUAL' && mapping.implementation.some(item => item.id === 'request_id')));
+
+  const secondTurn = await firstHarness.handlers.get('agent/pre-step')(
+    { agent: secondAgent, turn: 1, step: 1, signal: new AbortController().signal },
+    async () => ({ kind: 'enter', messages: [userMessage('SESSION_B_CURRENT: review Request ID durability constraints')] }),
+  );
+  assert.equal(secondTurn.kind, 'enter');
+  const secondSnapshot = secondTurn.messages[0].content[0].text;
+  assert.match(secondSnapshot, /Echo Request ID/);
+  assert.match(secondSnapshot, /Keep public API stable/);
+  assert.match(secondSnapshot, /Use X-Request-ID/);
+  assert.match(secondSnapshot, /attach_request_id code/);
+  assert.doesNotMatch(secondSnapshot, /RAW_SESSION_A_ONLY_7F3C/);
+  assert.doesNotMatch(secondSnapshot, /SESSION_A_SURFACE_ONLY/);
+  secondAgent.session.enter(secondTurn.messages);
+  const secondVisible = secondAgent.session.deriveMessages();
+  assert.equal(secondVisible.length, 2);
+  assert.doesNotMatch(JSON.stringify(secondVisible), /RAW_SESSION_A_ONLY_7F3C|SESSION_A_SURFACE_ONLY/);
+  assert.equal(firstHarness.handlers.get('llm/stream')(
+    authorizedAgentRequest(secondAgent, { sessionId: 'session-persistence-b', system: 'Static instructions', tools: [], messages: secondVisible }),
+    () => 'second-session-streamed',
+  ), 'second-session-streamed');
+  const secondFinalAudit = JSON.parse(await firstHarness.tools.get('context_audit').execute({}, { agent: secondAgent }));
+  assert.equal(secondFinalAudit.status, 'allowed');
+  assert.equal(secondFinalAudit.finalSnapshotCount, 1);
+  assert.equal(secondFinalAudit.finalMessageCount, 2);
+  const firstSettingsStillIsolated = JSON.parse(await firstHarness.tools.get('context_session_config').execute({}, { agent: firstAgent }));
+  assert.equal(firstSettingsStillIsolated.tokenBudget, 2000);
+  assert.equal(firstSettingsStillIsolated.target, 'function.request_id_durability');
+  assert.deepEqual(firstSettingsStillIsolated.exclude, ['function.unrelated']);
+  firstDisposers[0]();
+  secondDisposers[0]();
+
+  const restartedHarness = createHarnessContext();
+  apply(restartedHarness.ctx, { webUi: false, autoScan: false });
+  const restartedAgent = {
+    session: createSession('session-persistence-after-restart', root),
+    ctx: { effect() {} },
+  };
+  restartedHarness.handlers.get('agent/session-start')({ agent: restartedAgent });
+  const restartedSettings = JSON.parse(await restartedHarness.tools.get('context_session_config').execute({}, { agent: restartedAgent }));
+  assert.equal(restartedSettings.target, null);
+  assert.equal(restartedSettings.tokenBudget, 6000);
+  assert.deepEqual(restartedSettings.include, []);
+  assert.deepEqual(restartedSettings.exclude, []);
+  assert.equal(JSON.parse(await restartedHarness.tools.get('context_audit').execute({}, { agent: restartedAgent })).status, 'unavailable');
+
+  const restartedGraph = JSON.parse(await restartedHarness.tools.get('context_graph_get').execute({}, { agent: restartedAgent }));
+  assert.ok(restartedGraph.nodes.some(node => node.id === 'task.request_id_initial'));
+  assert.ok(restartedGraph.nodes.some(node => node.id === 'constraint.request_id_api'));
+  assert.ok(durableEdges.every(expected => restartedGraph.edges.some(edge => edge.source === expected.source && edge.target === expected.target && edge.type === expected.type && edge.mode === 'MANUAL')));
+  assert.ok(restartedGraph.mappings.some(mapping => mapping.functional === 'function.request_id_durability'
+    && mapping.mode === 'MANUAL'
+    && mapping.implementation.some(item => item.id === 'request_id')));
+  assert.ok((await loadFactsCache(root))?.files['request_id.py']);
+  assert.equal(await readFile(path.join(root, '.context', 'project.md'), 'utf8'), initialProjectMemory);
+  assert.equal(await readFile(path.join(root, '.context', 'modules', 'request_id', 'interface.md'), 'utf8'), initialModuleMemory);
+  const restartScan = JSON.parse(await restartedHarness.tools.get('context_graph_scan').execute({}, { agent: restartedAgent }));
+  assert.deepEqual(restartScan.invalidation.changed, []);
+  assert.deepEqual(restartScan.invalidation.deleted, []);
+  assert.ok(restartScan.invalidation.unchanged.includes('request_id.py'));
+
+  const restartedTurn = await restartedHarness.handlers.get('agent/pre-step')(
+    { agent: restartedAgent, turn: 1, step: 1, signal: new AbortController().signal },
+    async () => ({ kind: 'enter', messages: [userMessage('SESSION_C_CURRENT: verify Request ID durability decision')] }),
+  );
+  assert.equal(restartedTurn.kind, 'enter');
+  const restartedSnapshot = restartedTurn.messages[0].content[0].text;
+  assert.match(restartedSnapshot, /Use X-Request-ID/);
+  assert.doesNotMatch(restartedSnapshot, /RAW_SESSION_A_ONLY_7F3C|SESSION_A_SURFACE_ONLY|SESSION_B_CURRENT/);
+  restartedAgent.session.enter(restartedTurn.messages);
+  const restartedVisible = restartedAgent.session.deriveMessages();
+  assert.doesNotMatch(JSON.stringify(restartedVisible), /RAW_SESSION_A_ONLY_7F3C|SESSION_A_SURFACE_ONLY|SESSION_B_CURRENT/);
+  assert.equal(restartedHarness.handlers.get('llm/stream')(
+    authorizedAgentRequest(restartedAgent, { sessionId: 'session-persistence-after-restart', system: 'Static instructions', tools: [], messages: restartedVisible }),
+    () => 'restarted-session-streamed',
+  ), 'restarted-session-streamed');
+  const restartedFinalAudit = JSON.parse(await restartedHarness.tools.get('context_audit').execute({}, { agent: restartedAgent }));
+  assert.equal(restartedFinalAudit.status, 'allowed');
+  assert.equal(restartedFinalAudit.finalSnapshotCount, 1);
+  assert.equal(restartedFinalAudit.finalMessageCount, 2);
 });
 
 test('reuseContext preserves an unchanged snapshot identity without retaining conversation history', async () => {

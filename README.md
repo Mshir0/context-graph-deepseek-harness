@@ -195,10 +195,37 @@ Host 端仅挂载同源 `/context-graph/api/*` 数据接口，并校验请求路
 
 `project.md`、`graph.json` 和人工维护的模块记忆是工程级长期知识，建议提交到目标工程的 Git，而不是依赖聊天历史。`cache/implementation-facts.json` 是可重建的分析缓存，通常应加入目标工程的 `.gitignore`：文件未变化时直接复用事实，文件集合稳定时只重新分析内容变化的文件；新增或删除源码文件时会保守地重新分析全工程，以避免包根和导入别名失真。
 
+## 跨对话持久化验收
+
+跨对话测试必须始终使用同一个 workspace。项目知识保存在该工程的 `.context/graph.json` 和模块记忆中；当前目标、临时包含/排除、预算、复用开关、最近一次审计和 Session Surface 都只属于当前对话。
+
+在对话 A 中先扫描代码，再让 Agent 执行下面的准备任务。Starlette 工程中的实现模块通常是 `starlette.starlette.middleware.request_id`；如果实际扫描结果不同，先用 `context_graph_get` 查询并替换该 ID。
+
+```text
+执行 Context Graph 跨对话持久化准备，不要修改源码：
+1. 调用 context_graph_scan。
+2. 用 context_graph_add_node 保存 MANUAL 功能节点 function.request_id_persistence，标题为“Request ID 持久化”，内容为“请求 state 与响应 X-Request-ID 必须保持一致”。
+3. 分别保存 requirement.request_id_echo、constraint.request_id_public_api、decision.request_id_header 和 task.request_id_verify 四个 MANUAL 节点；约束内容必须写明“不修改 Request、Response、Router 公共接口”，决策内容写明“使用 X-Request-ID”。
+4. 用 context_graph_add_edge 建立功能到需求、约束、决策的 MANUAL 关系，以及任务到功能的 MANUAL targets 关系。
+5. 用 functional_map_implementation 将 function.request_id_persistence 以 MANUAL 模式映射到 starlette.starlette.middleware.request_id。
+6. 用 context_graph_get 复核节点、关系和映射已经保存，只报告结果。
+```
+
+随后在对话 A 发送一条普通消息：`临时聊天标记 RAW-A-7F3C，不要把它保存到图谱。`，并在“上下文”弹层把预算改为 2000、临时排除任意无关节点。创建一个全新 DSH 对话 B，仍选择同一个 Starlette workspace。发送第一条消息前，弹层应恢复默认预算、空的临时包含/排除和默认复用设置；图谱中仍应存在刚才保存的节点与 MANUAL 映射。
+
+在对话 B 发送：
+
+```text
+只根据当前工作区 Context Graph，说明“Request ID 持久化”的需求、公共接口约束、已确认决策和相关实现模块。打开 Context Preview 并报告本轮包含与排除的节点；不要修改代码或图谱。
+```
+
+验收结果应同时满足：回答能使用对话 A 保存的结构化知识；Preview 不含 `RAW-A-7F3C` 或对话 A 的旧消息；对话 A 的 2000 Token 预算和临时排除项没有继承；关闭并重新启动 `pnpm dsh web` 后，再创建对话 C，项目知识仍存在。需要把工程记忆同步到另一台机器时，应随项目提交 `.context/graph.json`、`.context/project.md` 和人工维护的 `.context/modules/`；分析缓存可以重新生成。
+
 ## 验证
 
 ```bash
 node --test
+node --test --test-name-pattern="project context persists" test/dsh-plugin-lifecycle.test.js
 pnpm check
 python3 -m py_compile src/analyze_python.py src/dependency_skill.py
 ```
