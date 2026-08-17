@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { Readable } from 'node:stream';
 import { registerContextGraphRoutes } from '../src/dsh-routes.js';
 import { emptyGraph, loadGraph, saveGraph } from '../src/core.js';
-import { mkdtemp } from 'node:fs/promises';
+import { loadFactsCache } from '../src/implementation-index.js';
+import { mkdtemp, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -41,7 +42,7 @@ test('does not expose a standalone editor and rejects unregistered paths', async
   const route = harnessRoute();
   const page = await call(route.handler, '/context-graph/');
   assert.equal(page.status, 404);
-  assert.match(Buffer.concat(page.chunks).toString('utf8'), /details panel/);
+  assert.match(Buffer.concat(page.chunks).toString('utf8'), /Harness conversation view/);
   const denied = await call(route.handler, '/context-graph/api/scan', 'POST', JSON.stringify({ projectPath: process.platform === 'win32' ? 'C:\\Windows' : '/tmp' }));
   assert.equal(denied.status, 403);
 });
@@ -101,4 +102,68 @@ test('rejects task creation for a session from another workspace', async () => {
   const response = await call(route.handler, '/context-graph/api/tasks', 'POST', JSON.stringify({ projectPath: root, sessionId: 'session-1', content: '修复保存逻辑' }));
   assert.equal(response.status, 404);
   assert.deepEqual((await loadGraph(root)).nodes, []);
+});
+
+test('exposes the latest firewall audit only to its active workspace session', async () => {
+  const audit = { status: 'allowed', finalTokens: 42 };
+  const sessionState = new Map([['session-1', { projectPath: process.cwd(), lastAudit: audit }]]);
+  const route = harnessRoute(process.cwd(), sessionState);
+  const response = await call(route.handler, `/context-graph/api/audit?project=${encodeURIComponent(process.cwd())}&sessionId=session-1`);
+  assert.equal(response.status, 200);
+  assert.deepEqual(JSON.parse(Buffer.concat(response.chunks).toString('utf8')), audit);
+});
+
+test('serves bounded on-demand symbol context through the Harness route', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'context-graph-route-provider-'));
+  await writeFile(path.join(root, 'worker.py'), 'def run(value):\n    return value\n\ndef unrelated():\n    return "hidden"\n');
+  const route = harnessRoute(root);
+  const response = await call(route.handler, '/context-graph/api/context-request', 'POST', JSON.stringify({ projectPath: root, target: 'worker:run', scope: ['symbol'], reason: 'Change run', max_tokens: 80 }));
+  const payload = JSON.parse(Buffer.concat(response.chunks).toString('utf8'));
+  assert.equal(response.status, 200);
+  assert.equal(payload.type, 'context_response');
+  assert.ok(payload.estimatedTokens <= 80);
+  assert.match(payload.context, /def run/);
+  assert.doesNotMatch(payload.context, /unrelated/);
+});
+
+test('on-demand route honors graph and active-session Force Exclude without consuming cache invalidation', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'context-graph-route-provider-exclude-'));
+  await writeFile(path.join(root, 'worker.py'), 'def run(value):\n    return value\n');
+  const graph = emptyGraph(root);
+  graph.overrides.exclude.push('worker');
+  await saveGraph(root, graph);
+
+  const route = harnessRoute(root);
+  const graphBlocked = await call(route.handler, '/context-graph/api/context-request', 'POST', JSON.stringify({ projectPath: root, target: 'worker:run', scope: ['symbol'], reason: 'Change run', max_tokens: 80 }));
+  assert.equal(graphBlocked.status, 403);
+  assert.match(Buffer.concat(graphBlocked.chunks).toString('utf8'), /force-excluded/);
+  assert.equal(await loadFactsCache(root), null);
+
+  graph.overrides.exclude = [];
+  await saveGraph(root, graph);
+  const sessionRoute = harnessRoute(root, new Map([['session-1', { projectPath: root, exclude: ['worker'] }]]));
+  const sessionBlocked = await call(sessionRoute.handler, '/context-graph/api/context-request', 'POST', JSON.stringify({ projectPath: root, sessionId: 'session-1', target: 'worker:run', scope: ['symbol'], reason: 'Change run', max_tokens: 80 }));
+  assert.equal(sessionBlocked.status, 403);
+  assert.match(Buffer.concat(sessionBlocked.chunks).toString('utf8'), /force-excluded/);
+  assert.equal(await loadFactsCache(root), null);
+});
+
+test('keeps a functional target when requesting its interface context', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'context-graph-route-functional-provider-'));
+  await writeFile(path.join(root, 'worker.py'), 'def run(value):\n    return value\n');
+  const graph = emptyGraph(root);
+  graph.nodes.push(
+    { id: 'function.worker', type: 'functional', title: 'Worker' },
+    { id: 'interface.worker', type: 'interface', title: 'Worker contract', content: 'run(value) returns value' },
+    { id: 'worker:run', type: 'implementation_function', path: 'worker.py', metadata: { module: 'worker', qualified_id: 'worker:run', start_line: 1, end_line: 2 } },
+  );
+  graph.edges.push({ source: 'interface.worker', target: 'function.worker', type: 'applies_to', scope: ['interface'], mode: 'MANUAL' });
+  graph.mappings.push({ functional: 'function.worker', implementation: [{ id: 'worker:run', path: 'worker.py' }], mode: 'MANUAL' });
+  await saveGraph(root, graph);
+  const route = harnessRoute(root);
+  const response = await call(route.handler, '/context-graph/api/context-request', 'POST', JSON.stringify({ projectPath: root, target: 'function.worker', scope: ['interface'], reason: 'Need contract', max_tokens: 80 }));
+  const payload = JSON.parse(Buffer.concat(response.chunks).toString('utf8'));
+  assert.equal(response.status, 200);
+  assert.equal(payload.target, 'function.worker');
+  assert.match(payload.context, /run\(value\) returns value/);
 });

@@ -6,20 +6,32 @@ function titleCase(value) { return value.split(/[._/-]+/).filter(Boolean).map(pa
 function implementationNodes(graph) { return graph.nodes.filter(node => IMPLEMENTATION_TYPES.has(node.type)); }
 function evidenceFor(node) { return { id: node.id, path: node.path || '', evidence: node.path || node.id }; }
 
-function components(nodes, relationships) {
-  const ids = new Set(nodes.map(node => node.id)); const adjacency = new Map(nodes.map(node => [node.id, new Set()]));
-  for (const relation of relationships || []) if (ids.has(relation.from) && ids.has(relation.to) && relation.to !== '?') { adjacency.get(relation.from).add(relation.to); adjacency.get(relation.to).add(relation.from); }
-  const result = []; const seen = new Set();
-  for (const node of nodes) {
-    if (seen.has(node.id)) continue;
-    const group = []; const queue = [node.id]; seen.add(node.id);
-    while (queue.length) { const id = queue.shift(); group.push(id); for (const next of adjacency.get(id) || []) if (!seen.has(next)) { seen.add(next); queue.push(next); } }
-    result.push(group);
-  }
-  return result;
+function domainKey(node) {
+  const path = String(node.path || '').replaceAll('\\', '/');
+  const parts = path.split('/').filter(Boolean);
+  const filename = (parts.pop() || node.id).replace(/\.[^.]+$/, '');
+  const generic = new Set(['src', 'source', 'lib', 'app', 'apps', 'packages', 'package', 'python', 'js', 'ts']);
+  const directories = parts.filter((part, index) => !generic.has(part.toLowerCase()) && part !== parts[index - 1]);
+  if (directories.length >= 2) return directories.at(-1).toLowerCase();
+  if (directories.length === 1 && !String(node.id).startsWith(`${directories[0]}.${directories[0]}.`)) return directories[0].toLowerCase();
+  if (HELPER_NAMES.has(filename.toLowerCase()) && directories.length) return directories.at(-1).toLowerCase();
+  const idParts = String(node.id).split('.').filter(Boolean);
+  return (idParts.length > 1 ? idParts.at(-2) : filename).toLowerCase();
 }
 
-function functionalTitle(group, nodeMap) {
+function capabilityGroups(nodes) {
+  const groups = new Map();
+  for (const node of nodes) {
+    const key = domainKey(node);
+    const group = groups.get(key) || [];
+    group.push(node.id);
+    groups.set(key, group);
+  }
+  return [...groups.entries()].map(([key, ids]) => ({ key, ids }));
+}
+
+function functionalTitle(group, nodeMap, domain = '') {
+  if (domain && !HELPER_NAMES.has(domain)) return titleCase(domain);
   const names = group.map(id => nodeMap.get(id)?.path || id).map(item => item.split('/').at(-1).replace(/\.[^.]+$/, '')).filter(Boolean);
   const preferred = names.find(name => /^(asr|api|auth|router|routing|record|encoder|subtitle|speaker|capture)/i.test(name)) || names.find(name => !HELPER_NAMES.has(name.toLowerCase())) || names[0] || 'Capability';
   return titleCase(preferred);
@@ -29,10 +41,15 @@ export function inferFunctionalModules(graph, implementationFacts = { relationsh
   const implementations = implementationNodes(graph); const nodeMap = new Map(implementations.map(node => [node.id, node]));
   const existing = new Set(graph.nodes.filter(node => node.type === 'functional').map(node => node.id));
   const proposals = []; const mappings = []; const functionalByImplementation = new Map();
-  for (const group of components(implementations, implementationFacts.relationships || [])) {
-    const title = functionalTitle(group, nodeMap); const id = `function.${slug(title)}`;
+  const proposedIds = new Set();
+  for (const inferred of capabilityGroups(implementations)) {
+    const group = inferred.ids;
+    const title = functionalTitle(group, nodeMap, inferred.key); const baseId = `function.${slug(title)}`;
+    let id = baseId; let suffix = 2;
+    while (proposedIds.has(id)) { id = `${baseId}-${suffix}`; suffix += 1; }
+    proposedIds.add(id);
     const finalId = existing.has(id) ? id : id;
-    if (!existing.has(finalId)) proposals.push({ id: finalId, type: 'functional', title, label: title, description: `${title} capability`, content: `${title} capability`, source: 'derived', priority: 'normal', status: 'active', mode: 'AUTO', provides: [], consumes: [], inputs: [], outputs: [], metadata: { layer: 'functional', inference: 'implementation-component' } });
+    if (!existing.has(finalId)) proposals.push({ id: finalId, type: 'functional', title, label: title, description: `${title} capability`, content: `${title} capability`, source: 'derived', priority: 'normal', status: 'active', mode: 'AUTO', provides: [], consumes: [], inputs: [], outputs: [], metadata: { layer: 'functional', inference: 'path-domain', evidence: group.map(item => nodeMap.get(item)?.path || item) } });
     const implementation = group.map(item => evidenceFor(nodeMap.get(item)));
     mappings.push({ functional: finalId, implementation, evidence: implementation.map(item => item.evidence), confidence: group.length > 1 ? 0.78 : 0.58, created_by: 'auto', mode: 'AUTO' });
     for (const item of group) functionalByImplementation.set(item, finalId);

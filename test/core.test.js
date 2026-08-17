@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { analyzeProject, compileContext, createTaskNode, emptyGraph, reconcileGraphs, validateGraph } from '../src/core.js';
+import { analyzeProject, compileContext, createTaskNode, emptyGraph, normalizeGraph, reconcileGraphs, validateGraph } from '../src/core.js';
 import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -41,7 +41,7 @@ test('repairs overlapping positions retained from an earlier scan', () => {
   assert.ok(Math.abs(second.x - first.x) >= 220 || Math.abs(second.y - first.y) >= 140);
 });
 
-test('removes deleted automatic implementation nodes and their graph references on rescan', () => {
+test('retains deleted implementation provenance as stale on rescan', () => {
   const graph = emptyGraph('/tmp/project');
   graph.nodes = [
     { id: 'live', type: 'code_module', source: 'code', path: 'live.py' },
@@ -52,12 +52,30 @@ test('removes deleted automatic implementation nodes and their graph references 
   graph.edges = [{ source: 'function.live', target: 'deleted', type: 'implemented_by', scope: [], mode: 'AUTO' }];
   graph.mappings = [{ functional: 'function.live', implementation: [{ id: 'live', path: 'live.py' }, { id: 'deleted', path: 'deleted.py' }] }];
   const result = reconcileGraphs({ modules: [{ id: 'live', path: 'live.py', imports: [] }] }, graph);
-  assert.deepEqual(result.removed, ['deleted']);
-  assert.ok(!result.graph.nodes.some(node => node.id === 'deleted'));
+  assert.deepEqual(result.removed, []);
+  assert.deepEqual(result.stale, ['deleted']);
+  assert.equal(result.graph.nodes.find(node => node.id === 'deleted').status, 'stale');
   assert.ok(result.graph.nodes.some(node => node.id === 'manual'));
-  assert.ok(!result.graph.edges.some(edge => edge.source === 'deleted' || edge.target === 'deleted'));
-  assert.deepEqual(result.graph.mappings[0].implementation.map(item => item.id), ['live']);
+  assert.ok(result.graph.edges.some(edge => edge.target === 'deleted'));
+  assert.deepEqual(result.graph.mappings[0].implementation.map(item => item.id), ['live', 'deleted']);
   assert.deepEqual(validateGraph(result.graph), []);
+});
+
+test('materializes symbol nodes and respects user deletion tombstones', () => {
+  const graph = emptyGraph('/tmp/project');
+  graph.overrides.deleted.push('service:ignored');
+  const result = reconcileGraphs({ modules: [{
+    id: 'service', path: 'service.py', imports: [], language: 'python', symbols: [
+      { name: 'Handler', kind: 'class', line: 1, start_line: 1, end_line: 8 },
+      { name: 'Handler.run', kind: 'function', subkind: 'method', container: 'service:Handler', line: 2, start_line: 2, end_line: 4 },
+      { name: 'ignored', kind: 'function', line: 10, start_line: 10, end_line: 12 },
+    ],
+  }] }, graph);
+  assert.ok(result.graph.nodes.some(node => node.id === 'service:Handler' && node.type === 'implementation_class'));
+  assert.ok(result.graph.nodes.some(node => node.id === 'service:Handler.run' && node.type === 'implementation_function'));
+  assert.ok(!result.graph.nodes.some(node => node.id === 'service:ignored'));
+  assert.ok(result.graph.edges.some(edge => edge.source === 'service' && edge.target === 'service:Handler' && edge.type === 'contains'));
+  assert.ok(result.graph.edges.some(edge => edge.source === 'service:Handler' && edge.target === 'service:Handler.run' && edge.type === 'contains'));
 });
 
 test('scans C source files and resolves quoted includes to project modules', async () => {
@@ -79,6 +97,24 @@ test('compiler prioritizes target, honors force exclude, and respects budget', a
   const graph = emptyGraph(root); graph.nodes = [{ id: 'a', path: 'a.py' }, { id: 'b', path: 'b.py', mode: 'FORCE_EXCLUDE' }]; graph.edges = [{ source: 'a', target: 'b', type: 'interface', scope: ['interface', 'state'] }];
   const result = await compileContext({ projectPath: root, graph, target: 'a', task: 'change cache', tokenBudget: 1000 });
   assert.equal(result.target, 'a'); assert.ok(result.included.some((item) => item.label === 'User task')); assert.ok(result.excluded.some((item) => item.module === 'b' && item.reason === 'FORCE_EXCLUDE'));
+});
+
+test('legacy Force Include edges remain hard under budget pressure', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'context-graph-legacy-force-'));
+  await mkdir(path.join(root, '.context', 'modules', 'a'), { recursive: true });
+  await mkdir(path.join(root, '.context', 'modules', 'b'), { recursive: true });
+  await writeFile(path.join(root, 'a.py'), 'print("a")');
+  await writeFile(path.join(root, '.context', 'modules', 'b', 'state.md'), 'required state '.repeat(80));
+  const graph = emptyGraph(root);
+  graph.nodes = [{ id: 'a', path: 'a.py' }, { id: 'b', path: 'b.py' }];
+  graph.edges = [{ source: 'a', target: 'b', type: 'dependency', scope: ['state'], mode: 'FORCE_INCLUDE' }];
+
+  const result = await compileContext({ projectPath: root, graph, target: 'a', task: 'change a', tokenBudget: 40 });
+  const forced = result.included.find(item => item.module === 'b' && item.scope === 'state');
+  assert.ok(forced);
+  assert.equal(forced.forceInclude, true);
+  assert.equal(forced.policyClass, 'hard');
+  assert.equal(result.overBudget, true);
 });
 
 test('creates an immutable task node linked to its selected target', () => {
@@ -133,4 +169,19 @@ test('does not inject a persisted task twice when the sent message contains it',
   const result = await compileContext({ projectPath: root, graph: created.graph, entry: created.task.id, task: `任务类型：开发\n目标模块：自动识别\n\n${content}`, tokenBudget: 2000 });
   const taskItems = result.included.filter(item => item.node === created.task.id);
   assert.deepEqual(taskItems.map(item => item.scope), ['task']);
+});
+
+test('compiler refuses implementation paths outside the registered project', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'context-path-boundary-'));
+  const graph = normalizeGraph({ ...emptyGraph(root), nodes: [
+    { id: 'task', type: 'task', content: 'Inspect implementation' },
+    { id: 'outside', type: 'code_module', path: '../outside-secret.txt' },
+  ], edges: [
+    { source: 'task', target: 'outside', type: 'targets', scope: ['code'], mode: 'MANUAL' },
+  ] }, root);
+
+  await assert.rejects(
+    compileContext({ projectPath: root, graph, entry: 'task', task: 'Inspect implementation', tokenBudget: 2000 }),
+    /Context file is outside project/,
+  );
 });

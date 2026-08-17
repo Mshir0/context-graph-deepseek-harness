@@ -17,8 +17,11 @@ test('infers the most specific module mentioned by the task', () => {
 });
 
 test('preview hides compiled content by default', () => {
-  const result = { target: 'a', tokenBudget: 100, estimatedTokens: 50, overBudget: false, included: [], excluded: [], context: 'secret context' };
-  assert.equal('context' in preview(result, false), false);
+  const result = { target: 'a', tokenBudget: 100, estimatedTokens: 50, overBudget: false, included: [], excluded: [], manifest: { selectedTokens: 50 }, validation: { valid: true }, context: 'secret context' };
+  const summary = preview(result, false);
+  assert.equal('context' in summary, false);
+  assert.deepEqual(summary.manifest, result.manifest);
+  assert.deepEqual(summary.validation, result.validation);
   assert.equal(preview(result, true).context, 'secret context');
   assert.equal(escapeAttribute('a"<&'), 'a&quot;&lt;&amp;');
 });

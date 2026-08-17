@@ -1,8 +1,6 @@
-import { createHash } from 'node:crypto';
-import { createUserMessage } from '@deepseek-ai/dsh-llm';
+import { isAgentLoopRequest as isDshAgentLoopRequest } from '@deepseek-ai/dsh-llm';
 import { defineTool } from '@deepseek-ai/dsh-tools';
 import {
-  analyzeProject,
   compileContext,
   ensureMemory,
   gitSummary,
@@ -11,7 +9,20 @@ import {
   saveGraph,
 } from './core.js';
 import { registerContextGraphRoutes } from './dsh-routes.js';
-import { escapeAttribute, inferTarget, latestUserText, preview } from './dsh-context.js';
+import { inferTarget, latestUserText, preview } from './dsh-context.js';
+import {
+  auditFinalRequest,
+  ContextFirewallError,
+  createContextAudit,
+  createContextSnapshot,
+  filterNewTurnMessages,
+  inspectRawContext,
+  messageFingerprints,
+  placeContextSnapshot,
+  validateCompiledContext,
+} from './context-firewall.js';
+import { contextRequest } from './context-provider.js';
+import { analyzeContextProject, applyContextInvalidation } from './project-analysis.js';
 import { resolveSessionContextSettings, updateSessionContextSettings } from './session-context.js';
 import { applyExtraction, detectContextConflicts, extractContext } from './context-extraction.js';
 import { applyFunctionalInference, inferFunctionalModules, mergeFunctionalNodes, splitFunctionalNode } from './semantic-functional.js';
@@ -31,13 +42,28 @@ import {
 } from './dependency-skill.js';
 
 export const name = 'context-graph';
-export const inject = ['agents', 'sessions', 'tools', 'systemPrompt'];
+export const inject = ['agents', 'sessions', 'tools', 'systemPrompt', 'llm'];
 
-const DEFAULTS = { tokenBudget: 6000, autoScan: true, autoInject: true, webUi: true };
+const DEFAULTS = {
+  tokenBudget: 6000,
+  requestTokenBudget: 64000,
+  outputReserveTokens: 6000,
+  tokenSafetyRatio: 1.15,
+  allowedInstructionPlugins: [],
+  autoScan: true,
+  autoInject: true,
+  webUi: true,
+  firewallMode: 'enforce',
+};
 
 export function apply(ctx, input = {}) {
   const config = resolveConfig(input);
   const sessionState = new Map();
+  const runtimeContextSuppressed = config.firewallMode === 'enforce' && typeof ctx.systemPrompt.suppressRuntimeContext === 'function';
+  if (config.firewallMode === 'enforce' && !runtimeContextSuppressed) {
+    throw new Error('context-graph enforce mode requires the DSH runtime Context suppression API');
+  }
+  if (runtimeContextSuppressed) ctx.systemPrompt.suppressRuntimeContext();
 
   registerTools(ctx, config, sessionState);
 
@@ -53,18 +79,137 @@ export function apply(ctx, input = {}) {
     agent.ctx.effect(() => () => sessionState.delete(key), 'contextGraph.disposeSession()');
   });
 
-  ctx.on('agent/pre-step', async ({ agent, signal }, next) => {
+  ctx.on('agent/pre-step', async ({ agent, signal, turn, step }, next) => {
     const decision = await next();
     if (decision.kind !== 'enter' || signal.aborted) return decision;
+    const key = String(agent.session.id);
+    const state = sessionState.get(key) || {};
+    const settings = resolveSessionContextSettings(state, config);
+    if (config.firewallMode === 'off') return decision;
+    if (!settings.autoInject) {
+      if (config.firewallMode !== 'enforce') {
+        sessionState.set(key, { ...state, firewallTurnKey: null, lastCompilation: null, lastAudit: { version: 1, status: 'disabled', mode: config.firewallMode, reason: 'Automatic Context Graph injection is disabled for this session.', runtimeContextSuppressed, stepMessages: decision.messages.length, allowedStepMessages: decision.messages.length, createdAt: new Date().toISOString() } });
+        return decision;
+      }
+      const messages = filterNewTurnMessages(decision.messages, { allowedInstructionPlugins: config.allowedInstructionPlugins });
+      const turnKey = firewallTurnKey(turn, decision.messages);
+      const rawContext = inspectRawContext(agent.session, decision.messages);
+      if (turnKey && state.firewallTurnKey === turnKey && state.lastCompilation?.graphInjection === 'disabled') {
+        const previous = state.lastCompilation;
+        const audit = { ...createContextAudit({ status: 'allowed', mode: config.firewallMode, turn, step, task: previous.task, target: previous.target, result: previous.result, validation: previous.validation, placement: { action: 'surface-reuse', surfaceNodesBefore: state.lastAudit?.surfaceNodesBefore }, raw: rawContext, stepMessages: decision.messages.length, allowedStepMessages: messages.length, expectedMessageFingerprints: expectedStepMessageFingerprints(agent.session, state.lastAudit, messages, { turn, step }) }), graphInjection: 'disabled', reason: 'Automatic Context Graph injection is disabled; the enforced snapshot contains no project graph context.' };
+        sessionState.set(key, { ...state, lastAudit: audit });
+        return { kind: 'enter', messages };
+      }
+      const task = latestUserText(messages);
+      if (!task) {
+        const error = 'No ordinary user task is available for the context-free Firewall snapshot';
+        const audit = createContextAudit({ status: 'blocked', mode: config.firewallMode, turn, step, task: '', target: null, raw: rawContext, stepMessages: decision.messages.length, allowedStepMessages: messages.length, error });
+        sessionState.set(key, { ...state, lastAudit: audit });
+        return { kind: 'reject' };
+      }
+      const target = 'context.none';
+      const result = contextFreeResult(task, settings.tokenBudget);
+      const validation = { valid: true, errors: [], warnings: [] };
+      const snapshot = createContextSnapshot(result, target, { mode: config.firewallMode });
+      try {
+        const placement = placeContextSnapshot(agent.session, snapshot, { mode: config.firewallMode });
+        const audit = { ...createContextAudit({ status: 'allowed', mode: config.firewallMode, turn, step, task, target, result, validation, placement, raw: rawContext, stepMessages: decision.messages.length, allowedStepMessages: messages.length, expectedMessages: [snapshot, ...messages] }), graphInjection: 'disabled', reason: 'Automatic Context Graph injection is disabled; the enforced snapshot contains no project graph context.' };
+        sessionState.set(key, { ...state, firewallTurnKey: turnKey, lastCompilation: { task, target, result, validation, graphInjection: 'disabled' }, lastAudit: audit });
+        if (placement.action === 'prepend') return { kind: 'enter', messages: [snapshot, ...messages] };
+        return { kind: 'enter', messages };
+      } catch (error) {
+        const audit = createContextAudit({ status: 'blocked', mode: config.firewallMode, turn, step, task, target, result, validation, raw: rawContext, stepMessages: decision.messages.length, allowedStepMessages: messages.length, error: error.message || String(error) });
+        sessionState.set(key, { ...state, lastAudit: audit });
+        ctx.logger.warn(`context-graph: context-free request blocked by Context Firewall: ${error.message || String(error)}`);
+        return { kind: 'reject' };
+      }
+    }
+    const turnKey = firewallTurnKey(turn, decision.messages);
+    const allowedMessages = filterNewTurnMessages(decision.messages, { allowedInstructionPlugins: config.allowedInstructionPlugins });
+    const rawContext = inspectRawContext(agent.session, decision.messages);
+    if (turnKey && state.firewallTurnKey === turnKey) {
+      if (config.firewallMode !== 'enforce') return decision;
+      if (!state.lastCompilation || state.lastAudit?.status !== 'allowed') {
+        const error = 'Context Firewall has no validated snapshot for this tool step';
+        const audit = createContextAudit({ status: 'blocked', mode: config.firewallMode, turn, step, task: state.lastCompilation?.task || '', target: state.lastCompilation?.target || null, result: state.lastCompilation?.result, validation: state.lastCompilation?.validation, raw: { ...rawContext, graphRawTokens: state.lastCompilation?.result?.rawTokens || 0 }, stepMessages: decision.messages.length, allowedStepMessages: allowedMessages.length, error });
+        sessionState.set(key, { ...state, lastAudit: audit });
+        ctx.logger.warn(`context-graph: request blocked by Context Firewall: ${error}`);
+        return { kind: 'reject' };
+      }
+      const previous = state.lastCompilation;
+      const audit = createContextAudit({ status: 'allowed', mode: config.firewallMode, turn, step, task: previous.task, target: previous.target, result: previous.result, validation: previous.validation, placement: { action: 'surface-reuse', surfaceNodesBefore: state.lastAudit?.surfaceNodesBefore }, raw: { ...rawContext, graphRawTokens: previous.result.rawTokens || 0 }, stepMessages: decision.messages.length, allowedStepMessages: allowedMessages.length, expectedMessageFingerprints: expectedStepMessageFingerprints(agent.session, state.lastAudit, allowedMessages, { turn, step }) });
+      sessionState.set(key, { ...state, lastAudit: audit });
+      return { kind: 'enter', messages: allowedMessages };
+    }
+    const task = latestUserText(allowedMessages);
+    let compiled;
+    let validation;
     try {
-      const message = await compileStepMessage(agent, decision.messages, config, sessionState, signal);
-      if (message === null || signal.aborted) return decision;
-      return { kind: 'enter', messages: [...decision.messages, message] };
+      if (!task) throw new ContextFirewallError('No ordinary user task is available after Context Firewall filtering', 'CONTEXT_TASK_REQUIRED');
+      compiled = await compileStepContext(agent, task, config, settings, signal);
+      validation = await validateCompiledContext(compiled.result, {
+        target: compiled.target,
+        task,
+        forceExclude: compiled.forceExclude,
+        allowRawConversation: config.contextPolicy?.conversation?.enabled === true,
+        validate: typeof config.validateContext === 'function' ? config.validateContext : undefined,
+      });
+      if (!validation.valid) throw new ContextFirewallError(validation.errors.join('; '));
+      if (signal.aborted) return decision;
+      const reusableFingerprint = `${compiled.target}\0${compiled.result.reusableContextFingerprint || ''}`;
+      const contextReused = settings.reuseContext === true
+        && state.reusableFingerprint === reusableFingerprint
+        && state.lastCompilation?.snapshot;
+      const snapshot = contextReused
+        ? state.lastCompilation.snapshot
+        : createContextSnapshot(compiled.result, compiled.target, { mode: config.firewallMode });
+      const placement = {
+        ...placeContextSnapshot(agent.session, snapshot, { mode: config.firewallMode }),
+        reused: Boolean(contextReused),
+      };
+      const outputMessages = config.firewallMode === 'enforce' ? allowedMessages : decision.messages;
+      const audit = createContextAudit({ status: 'allowed', mode: config.firewallMode, turn, step, task, target: compiled.target, result: compiled.result, validation, placement, raw: { ...rawContext, graphRawTokens: compiled.result.rawTokens || 0 }, stepMessages: decision.messages.length, allowedStepMessages: outputMessages.length, expectedMessages: [snapshot, ...outputMessages] });
+      sessionState.set(key, {
+        ...state,
+        target: compiled.target,
+        firewallTurnKey: turnKey,
+        fingerprint: audit.compiledFingerprint,
+        reusableFingerprint,
+        lastCompilation: { task, target: compiled.target, result: compiled.result, validation, snapshot },
+        lastAudit: audit,
+      });
+      if (placement.action === 'prepend' || placement.action === 'audit-prepend') return { kind: 'enter', messages: [snapshot, ...outputMessages] };
+      return { kind: 'enter', messages: outputMessages };
     } catch (error) {
-      ctx.logger.warn(`context-graph: automatic context injection skipped: ${String(error)}`);
-      return decision;
+      const audit = createContextAudit({ status: 'blocked', mode: config.firewallMode, turn, step, task, target: compiled?.target || null, result: compiled?.result, validation, raw: { ...rawContext, graphRawTokens: compiled?.result?.rawTokens || 0 }, stepMessages: decision.messages.length, allowedStepMessages: allowedMessages.length, error: error.message || String(error) });
+      sessionState.set(key, { ...state, lastAudit: audit });
+      ctx.logger.warn(`context-graph: request blocked by Context Firewall: ${error.message || String(error)}`);
+      return config.firewallMode === 'enforce' ? { kind: 'reject' } : decision;
     }
   }, { prepend: true });
+
+  ctx.on('llm/stream', (options, next) => {
+    if (!isAgentLoopRequest(options) || config.firewallMode === 'off') return next();
+    const key = String(options.sessionId);
+    const state = sessionState.get(key);
+    const previousAudit = state?.lastAudit || createContextAudit({
+      status: 'blocked',
+      mode: config.firewallMode,
+      error: 'Context Firewall has no pre-step audit for this Agent request',
+    });
+    const audit = auditFinalRequest(previousAudit, options, {
+      enforce: config.firewallMode === 'enforce',
+      requestTokenBudget: config.requestTokenBudget,
+      outputReserveTokens: config.outputReserveTokens,
+      tokenSafetyRatio: config.tokenSafetyRatio,
+    });
+    sessionState.set(key, { ...(state || {}), lastAudit: audit });
+    if (config.firewallMode === 'enforce' && !audit.validation.valid) {
+      ctx.logger.warn(`context-graph: final LLM request blocked by Context Firewall: ${audit.error}`);
+      throw new ContextFirewallError(audit.error, 'CONTEXT_FINAL_PAYLOAD_BLOCKED');
+    }
+    return next();
+  }, { global: true, prepend: true });
 
   if (config.webUi) {
     ctx.inject(['webServer', 'workspaceRegistry'], webCtx => {
@@ -73,10 +218,20 @@ export function apply(ctx, input = {}) {
   }
 }
 
+export function isAgentLoopRequest(options) {
+  return isDshAgentLoopRequest(options);
+}
+
 function resolveConfig(input) {
   const config = { ...DEFAULTS, ...input };
   if (!Number.isInteger(config.tokenBudget) || config.tokenBudget < 1000) throw new Error('context-graph tokenBudget must be an integer >= 1000');
+  if (!Number.isInteger(config.requestTokenBudget) || config.requestTokenBudget < 1000) throw new Error('context-graph requestTokenBudget must be an integer >= 1000');
+  if (!Number.isInteger(config.outputReserveTokens) || config.outputReserveTokens < 0) throw new Error('context-graph outputReserveTokens must be an integer >= 0');
+  if (!Number.isFinite(config.tokenSafetyRatio) || config.tokenSafetyRatio < 1 || config.tokenSafetyRatio > 2) throw new Error('context-graph tokenSafetyRatio must be from 1 to 2');
+  if (config.tokenBudget + config.outputReserveTokens > config.requestTokenBudget) throw new Error('context-graph requestTokenBudget must cover tokenBudget plus outputReserveTokens');
+  if (!Array.isArray(config.allowedInstructionPlugins) || config.allowedInstructionPlugins.some(value => typeof value !== 'string' || !value)) throw new Error('context-graph allowedInstructionPlugins must be an array of plugin ids');
   for (const key of ['autoScan', 'autoInject', 'webUi']) if (typeof config[key] !== 'boolean') throw new Error(`context-graph ${key} must be boolean`);
+  if (!['enforce', 'audit', 'off'].includes(config.firewallMode)) throw new Error('context-graph firewallMode must be enforce, audit, or off');
   return config;
 }
 
@@ -87,10 +242,12 @@ function registerTools(ctx, config, sessionState) {
     parameters: {},
     async execute(_args, exec) {
       const root = workspaceOf(exec);
-      const result = reconcileGraphs(await analyzeProject(root), await loadGraph(root));
+      const analysis = await analyzeContextProject(root);
+      const result = reconcileGraphs(analysis.facts, await loadGraph(root));
+      if (analysis.previousCache) result.graph = applyContextInvalidation(result.graph, analysis.invalidation);
       await ensureMemory(root, result.graph);
       await saveGraph(root, result.graph);
-      return JSON.stringify({ modules: result.codeGraph.modules.length, removed: result.removed, analyzerErrors: result.codeGraph.errors, suggestions: result.suggestions }, null, 2);
+      return JSON.stringify({ modules: result.codeGraph.modules.length, removed: result.removed, stale: result.stale, invalidation: analysis.invalidation, analyzerErrors: result.codeGraph.errors, suggestions: result.suggestions }, null, 2);
     },
   }));
 
@@ -99,7 +256,8 @@ function registerTools(ctx, config, sessionState) {
     description: 'Infer non-binding Functional Node and Functional-to-Implementation mapping proposals from implementation dependency facts. Code calls are never directly exposed as semantic edges.',
     parameters: { apply: { type: 'boolean', description: 'Persist inferred functional nodes, mappings, and semantic edge proposals after review.' } },
     async execute(args, exec) {
-      const root = workspaceOf(exec); const graph = await loadGraph(root); const facts = await analyzeDependencies(root); const implementationGraph = reconcileGraphs({ modules: facts.modules.map(module => ({ ...module, imports: [] })) }, graph, { prune: false }).graph;
+      const root = workspaceOf(exec); const graph = await loadGraph(root); const analysis = await analyzeContextProject(root, { persistCache: args.apply === true }); const facts = analysis.dependencyFacts; let implementationGraph = reconcileGraphs(analysis.facts, graph, { prune: false }).graph;
+      if (analysis.previousCache) implementationGraph = applyContextInvalidation(implementationGraph, analysis.invalidation);
       const proposal = inferFunctionalModules(implementationGraph, facts);
       if (args.apply === true) { const saved = await saveGraph(root, applyFunctionalInference(implementationGraph, proposal)); return JSON.stringify({ applied: true, proposal, graph: saved }, null, 2); }
       return JSON.stringify({ applied: false, proposal }, null, 2);
@@ -235,8 +393,38 @@ function registerTools(ctx, config, sessionState) {
       const root = workspaceOf(exec);
       const entry = args.entry || args.target; if (!entry) throw new Error('context_compile requires entry or target');
       const selected = resolveSessionContextSettings(sessionState.get(sessionKey(exec)), config);
-      const result = await compileContext({ projectPath: root, graph: await loadGraph(root), entry, target: args.target || entry, task: args.task, tokenBudget: args.token_budget ?? selected.tokenBudget, maxImplementationFiles: args.max_implementation_files ?? selected.maxImplementationFiles, semanticDepth: args.semantic_depth ?? selected.semanticDepth, include: args.include ?? selected.include, exclude: args.exclude ?? selected.exclude });
+      const result = await compileContext({ projectPath: root, graph: await loadGraph(root), entry, target: args.target || entry, task: args.task, tokenBudget: args.token_budget ?? selected.tokenBudget, maxImplementationFiles: args.max_implementation_files ?? selected.maxImplementationFiles, semanticDepth: args.semantic_depth ?? selected.semanticDepth, include: args.include ?? selected.include, exclude: args.exclude ?? selected.exclude, policy: config.contextPolicy });
       return JSON.stringify(preview(result, args.include_content === true), null, 2);
+    },
+  }));
+
+  ctx.tools.register(textTool({
+    name: 'context_request',
+    description: 'Load additional bounded context for one Functional or Implementation target only when the current task needs it. Does not traverse unrelated implementation dependencies.',
+    parameters: {
+      target: { type: 'string', required: true, description: 'Functional node, implementation module, or qualified symbol id.' },
+      scope: { type: 'array', items: { type: 'string' }, description: 'Requested scopes such as interface, implementation, symbol, test, or documentation.' },
+      reason: { type: 'string', required: true, description: 'Why the current task needs this additional context.' },
+      max_tokens: { type: 'integer', description: 'Hard response budget. Defaults to 3000 tokens.' },
+    },
+    async execute(args, exec) {
+      const root = workspaceOf(exec);
+      const graph = await loadGraph(root);
+      const analysis = await analyzeContextProject(root, { persistCache: false });
+      const selected = resolveSessionContextSettings(sessionState.get(sessionKey(exec)), config);
+      const forceExclude = [...new Set([...(graph.overrides?.exclude || []), ...selected.exclude, ...graph.nodes.filter(node => node.mode === 'FORCE_EXCLUDE').map(node => node.id)])];
+      const response = await contextRequest({ target: args.target, scope: args.scope, reason: args.reason, maxTokens: args.max_tokens }, { projectPath: root, graph, facts: analysis.facts, forceExclude });
+      return JSON.stringify(response, null, 2);
+    },
+  }));
+
+  ctx.tools.register(textTool({
+    name: 'context_audit',
+    description: 'Read the latest Context Firewall decision and compiled-context audit for this DSH session.',
+    parameters: {},
+    async execute(_args, exec) {
+      const audit = sessionState.get(sessionKey(exec))?.lastAudit;
+      return JSON.stringify(audit || { status: 'unavailable', reason: 'No Context Firewall turn has been audited yet.' }, null, 2);
     },
   }));
 
@@ -299,36 +487,104 @@ function textTool(definition) {
   });
 }
 
-async function compileStepMessage(agent, messages, config, sessionState, signal) {
+function contextFreeResult(task, tokenBudget) {
+  return {
+    target: 'context.none',
+    task,
+    tokenBudget,
+    estimatedTokens: 0,
+    overBudget: false,
+    valid: true,
+    included: [],
+    excluded: [],
+    context: '',
+    rawTokens: 0,
+    candidateTokens: 0,
+    excludedTokens: 0,
+    reusableContextFingerprint: 'context-free',
+  };
+}
+
+async function compileStepContext(agent, task, config, selected, signal) {
   const root = agent.session.header?.cwd || process.cwd();
-  const key = String(agent.session.id);
-  const selected = resolveSessionContextSettings(sessionState.get(key), config);
-  if (!selected.autoInject) return null;
   let graph = await loadGraph(root);
   if (graph.nodes.length === 0 && config.autoScan) {
-    const result = reconcileGraphs(await analyzeProject(root), graph);
+    const analysis = await analyzeContextProject(root);
+    const result = reconcileGraphs(analysis.facts, graph);
+    if (analysis.previousCache) result.graph = applyContextInvalidation(result.graph, analysis.invalidation);
     graph = result.graph;
     await ensureMemory(root, graph);
     await saveGraph(root, graph);
   }
-  if (signal.aborted || graph.nodes.length === 0) return null;
-  const task = latestUserText(messages);
-  if (task.length === 0) return null;
+  if (signal.aborted) throw new ContextFirewallError('Context compilation was aborted', 'CONTEXT_ABORTED');
+  if (graph.nodes.length === 0) throw new ContextFirewallError('Context Graph has no nodes', 'CONTEXT_GRAPH_EMPTY');
   const target = selected.target && graph.nodes.some(node => node.id === selected.target) ? selected.target : inferTarget(task, graph.nodes);
-  if (target === null) return null;
-  const result = await compileContext({ projectPath: root, graph, entry: target, target, task, tokenBudget: selected.tokenBudget, maxImplementationFiles: selected.maxImplementationFiles, semanticDepth: selected.semanticDepth, include: selected.include, exclude: selected.exclude });
-  const fingerprint = createHash('sha256').update(`${task}\0${target}\0${result.context}`).digest('hex');
-  const reusableFingerprint = `${target}\0${result.reusableContextFingerprint}`;
-  if (sessionState.get(key)?.fingerprint === fingerprint) return null;
-  if (selected.reuseContext && sessionState.get(key)?.reusableFingerprint === reusableFingerprint) {
-    sessionState.set(key, { ...sessionState.get(key), target, fingerprint, reusableFingerprint });
-    return null;
+  if (target === null) throw new ContextFirewallError('Unable to infer a Context Graph target; select a task target before retrying', 'CONTEXT_TARGET_REQUIRED');
+  const result = await compileContext({ projectPath: root, graph, entry: target, target, task, tokenBudget: selected.tokenBudget, maxImplementationFiles: selected.maxImplementationFiles, semanticDepth: selected.semanticDepth, include: selected.include, exclude: selected.exclude, policy: config.contextPolicy });
+  const forceExclude = [...new Set([
+    ...(graph.overrides?.exclude || []),
+    ...selected.exclude,
+    ...graph.nodes.filter(node => node.mode === 'FORCE_EXCLUDE').map(node => node.id),
+  ])];
+  return { result, target, forceExclude };
+}
+
+function firewallTurnKey(turn, messages) {
+  if (Number.isInteger(turn) || typeof turn === 'string') return `turn:${turn}`;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message?.role !== 'user' || ['plugin', 'tool'].includes(message?.source?.kind)) continue;
+    if (message.id) return `message:${message.id}`;
+    const text = latestUserText([message]);
+    if (text) return `task:${text}`;
   }
-  sessionState.set(key, { ...sessionState.get(key), target, fingerprint, reusableFingerprint });
-  return createUserMessage({
-    content: [{ type: 'text', text: `<context-graph target="${escapeAttribute(target)}" estimated-tokens="${result.estimatedTokens}">\n${result.context}\n</context-graph>` }],
-    source: { kind: 'plugin', plugin: 'context-graph', form: 'recall' },
-  });
+  return null;
+}
+
+function projectedSurfaceEvents(session) {
+  const nodes = session?.surface?.nodes;
+  if (!nodes || typeof nodes[Symbol.iterator] !== 'function' || !Array.isArray(session?.events)) return null;
+  const events = new Map(session.events.map(event => [event.seq, event]));
+  const projected = [];
+  for (const seq of nodes) {
+    const event = events.get(seq);
+    if (!event) return null;
+    let message = null;
+    if (event.type === 'user/message') message = event.data;
+    else if (event.type === 'assistant/message' && event.data?.message?.content?.length) message = event.data.message;
+    else if (event.type === 'tool/result') message = event.data?.message;
+    if (message) projected.push({ event, message });
+  }
+  return { events, projected };
+}
+
+function isTrustedAgentStepTail(event, events, turn, step) {
+  if (!Number.isInteger(turn) || !Number.isInteger(step) || event?.surfaceOp !== 'append') return false;
+  if (event.data?.turn !== turn || !Number.isInteger(event.data?.step) || event.data.step >= step) return false;
+  if (event.type === 'assistant/message') {
+    return event.data.message?.role === 'assistant'
+      && event.data.message?.source?.kind === 'model'
+      && Array.isArray(event.sourceEventSeqs);
+  }
+  if (event.type !== 'tool/result' || event.data.message?.source?.kind !== 'tool') return false;
+  if (!Array.isArray(event.sourceEventSeqs) || event.sourceEventSeqs.length !== 1) return false;
+  const call = events.get(event.sourceEventSeqs[0]);
+  return call?.type === 'tool/call'
+    && call.data?.turn === turn
+    && call.data?.step === event.data.step
+    && call.data?.callId === event.data.message.source.callId;
+}
+
+function expectedStepMessageFingerprints(session, previousAudit, messages, { turn, step } = {}) {
+  const previous = Array.isArray(previousAudit?.expectedMessageFingerprints) ? previousAudit.expectedMessageFingerprints : [];
+  const surface = projectedSurfaceEvents(session);
+  const visible = surface?.projected.map(item => item.message) || [];
+  const visibleFingerprints = messageFingerprints(visible);
+  const extendsPrevious = visibleFingerprints.length >= previous.length
+    && previous.every((fingerprint, index) => visibleFingerprints[index] === fingerprint);
+  const tailIsCurrentAgentOutput = extendsPrevious && surface !== null
+    && surface.projected.slice(previous.length).every(item => isTrustedAgentStepTail(item.event, surface.events, turn, step));
+  return [...(tailIsCurrentAgentOutput ? visibleFingerprints : previous), ...messageFingerprints(messages)];
 }
 
 function workspaceOf(exec) {

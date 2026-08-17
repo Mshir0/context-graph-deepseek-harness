@@ -5,6 +5,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { implementationForFunctional } from './semantic-functional.js';
+import { materializeImplementationIndex } from './implementation-index.js';
+import {
+  allocateContextBudget,
+  buildContextManifest,
+  classifyContextCandidate,
+  estimateContextTokens,
+} from './context-policy.js';
 
 const execFileAsync = promisify(execFile);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -13,10 +20,10 @@ export const RELATION_TYPES = ['dependency', 'reference', 'interface', 'data', '
 export const MODES = ['AUTO', 'MANUAL', 'FORCE_INCLUDE', 'FORCE_EXCLUDE'];
 export const SCOPES = ['code', 'context', 'interface', 'contract', 'state', 'decisions', 'history', 'content'];
 const PRIORITIES = ['critical', 'high', 'normal', 'low'];
-const STATUSES = ['active', 'resolved', 'deprecated', 'superseded', 'archived'];
+const STATUSES = ['active', 'resolved', 'deprecated', 'superseded', 'archived', 'stale'];
 
 export function emptyGraph(projectPath) {
-  return { version: 1, projectPath: path.resolve(projectPath), nodes: [], edges: [], mappings: [], overrides: { include: [], exclude: [] } };
+  return { version: 1, projectPath: path.resolve(projectPath), nodes: [], edges: [], mappings: [], overrides: { include: [], exclude: [], deleted: [] }, policy: {}, cache: { revision: '', invalidated: [] } };
 }
 
 function canonicalMode(value = 'AUTO') {
@@ -30,7 +37,7 @@ export function normalizeGraph(graph, projectPath = graph?.projectPath || proces
   return {
     ...base,
     projectPath: path.resolve(projectPath),
-    overrides: { include: [...(base.overrides?.include || [])], exclude: [...(base.overrides?.exclude || [])] },
+    overrides: { include: [...(base.overrides?.include || [])], exclude: [...(base.overrides?.exclude || [])], deleted: [...(base.overrides?.deleted || [])] },
     mappings: (base.mappings || []).map(mapping => ({ ...mapping, implementation: (mapping.implementation || []).map(item => typeof item === 'string' ? { id: item } : { ...item }), confidence: Number.isFinite(mapping.confidence) ? mapping.confidence : 1, created_by: mapping.created_by || 'user', mode: canonicalMode(mapping.mode || 'MANUAL') })),
     nodes: (base.nodes || []).map(node => ({
       ...node,
@@ -40,6 +47,10 @@ export function normalizeGraph(graph, projectPath = graph?.projectPath || proces
       content: typeof node.content === 'string' ? node.content : typeof node.description === 'string' ? node.description : '',
       description: typeof node.description === 'string' ? node.description : typeof node.content === 'string' ? node.content : '',
       source: node.source || ((node.type || 'code_module').startsWith('implementation_') || (node.type || 'code_module') === 'code_module' ? 'code' : 'user'),
+      created_by: node.created_by || (node.source === 'assistant' ? 'ai' : node.source === 'code' || (node.type || 'code_module').startsWith('implementation_') || (node.type || 'code_module') === 'code_module' ? 'analyzer' : node.source === 'derived' ? 'auto' : node.source === 'system' ? 'plugin' : 'user'),
+      confidence: Number.isFinite(node.confidence) ? Math.max(0, Math.min(1, node.confidence)) : Number.isFinite(node.metadata?.confidence) ? Math.max(0, Math.min(1, node.metadata.confidence)) : 1,
+      derived_from: Array.isArray(node.derived_from) ? [...new Set(node.derived_from.filter(value => typeof value === 'string'))] : node.metadata?.source_message ? [node.metadata.source_message] : [],
+      last_verified: node.last_verified || node.updated_at || node.created_at || now,
       priority: PRIORITIES.includes(node.priority) ? node.priority : 'normal',
       status: STATUSES.includes(node.status) ? node.status : 'active',
       mode: canonicalMode(node.mode || 'AUTO'),
@@ -61,6 +72,7 @@ export function validateGraph(graph) {
     if (node.type && !CONTEXT_NODE_TYPES.includes(node.type)) errors.push(`Unsupported context node type: ${node.type}`);
     if (node.priority && !PRIORITIES.includes(node.priority)) errors.push(`Unsupported priority: ${node.priority}`);
     if (node.status && !STATUSES.includes(node.status)) errors.push(`Unsupported status: ${node.status}`);
+    if (node.confidence !== undefined && (!Number.isFinite(node.confidence) || node.confidence < 0 || node.confidence > 1)) errors.push(`Unsupported confidence: ${node.confidence}`);
   }
   for (const edge of graph?.edges || []) {
     if (!ids.has(edge.source) || !ids.has(edge.target)) errors.push(`Unknown endpoint on ${edge.source} -> ${edge.target}`);
@@ -110,23 +122,24 @@ export function createTaskNode(graph, { content, title = '', taskType = 'develop
 
 function edgeKey(source, target) { return `${source}\0${target}`; }
 
-export async function analyzeProject(projectPath) {
+export async function analyzeProject(projectPath, { files = [] } = {}) {
   const executables = [process.env.DEPENDENCY_SKILL_PYTHON, ...(process.platform === 'win32' ? ['py', 'python'] : ['python3', 'python'])].filter(Boolean);
   let lastError;
   for (const executable of executables) {
     try {
-      const { stdout } = await execFileAsync(executable, [path.join(HERE, 'analyze_python.py'), path.resolve(projectPath)], { maxBuffer: 16 * 1024 * 1024 });
+      const { stdout } = await execFileAsync(executable, [path.join(HERE, 'analyze_python.py'), path.resolve(projectPath), ...files], { maxBuffer: 16 * 1024 * 1024 });
       return JSON.parse(stdout);
     } catch (error) { lastError = error; }
   }
   // Keep the editor usable on minimal hosts; Linux installations still use the
   // richer AST analyzer above whenever Python 3 is present.
-  return analyzePythonFallback(projectPath, lastError);
+  return analyzePythonFallback(projectPath, lastError, files);
 }
 
-async function analyzePythonFallback(projectPath, lastError) {
+async function analyzePythonFallback(projectPath, lastError, files = []) {
   const root = path.resolve(projectPath);
   const modules = [];
+  const requested = new Set(files.map(file => String(file).replaceAll('\\', '/')));
   const fallbackModuleId = relative => {
     const id = relative.replace(/\.(?:py|c|cc|cpp|cxx)$/i, '').replace(/(?:^|\/)__init__$/, '').replaceAll('/', '.');
     return id || path.basename(root);
@@ -161,6 +174,7 @@ async function analyzePythonFallback(projectPath, lastError) {
       if (entry.isDirectory()) await walk(file);
       else if (entry.isFile() && ['.py', '.c', '.cc', '.cpp', '.cxx'].includes(path.extname(entry.name).toLowerCase())) {
         const rel = path.relative(root, file).replaceAll(path.sep, '/');
+        if (requested.size && !requested.has(rel)) continue;
         const extension = path.extname(rel).toLowerCase();
         const id = fallbackModuleId(rel);
         const source = await optionalRead(file);
@@ -217,15 +231,35 @@ function nextNodePosition(nodes) {
 export function reconcileGraphs(codeGraph, contextGraph, { prune = true } = {}) {
   const graph = structuredClone(contextGraph);
   graph.mappings ||= [];
-  const scannedIds = new Set((codeGraph.modules || []).map(module => module.id));
-  const removed = new Set(prune ? graph.nodes.filter(node => {
+  graph.overrides ||= { include: [], exclude: [], deleted: [] };
+  graph.overrides.deleted ||= [];
+  const tombstones = new Set(graph.overrides.deleted);
+  const implementationIndex = materializeImplementationIndex(codeGraph);
+  let tombstoneChanged = true;
+  while (tombstoneChanged) {
+    tombstoneChanged = false;
+    for (const edge of implementationIndex.edges) if (edge.type === 'contains' && tombstones.has(edge.source) && !tombstones.has(edge.target)) {
+      tombstones.add(edge.target);
+      tombstoneChanged = true;
+    }
+  }
+  graph.overrides.deleted = [...tombstones];
+  if (tombstones.size) {
+    graph.nodes = graph.nodes.filter(node => !tombstones.has(node.id));
+    graph.edges = graph.edges.filter(edge => !tombstones.has(edge.source) && !tombstones.has(edge.target));
+    graph.mappings = graph.mappings.map(mapping => ({ ...mapping, implementation: (mapping.implementation || []).filter(item => !tombstones.has(typeof item === 'string' ? item : item.id)) })).filter(mapping => mapping.implementation.length > 0);
+  }
+  const scannedIds = new Set(implementationIndex.nodes.map(node => node.id));
+  const now = new Date().toISOString();
+  const stale = [];
+  if (prune) for (const node of graph.nodes) {
     const implementation = node.type === 'code_module' || node.type?.startsWith('implementation_');
-    return implementation && node.source === 'code' && !scannedIds.has(node.id);
-  }).map(node => node.id) : []);
-  if (removed.size) {
-    graph.nodes = graph.nodes.filter(node => !removed.has(node.id));
-    graph.edges = graph.edges.filter(edge => !removed.has(edge.source) && !removed.has(edge.target));
-    graph.mappings = graph.mappings.map(mapping => ({ ...mapping, implementation: (mapping.implementation || []).filter(item => !removed.has(typeof item === 'string' ? item : item.id)) })).filter(mapping => mapping.implementation.length > 0);
+    if (implementation && node.source === 'code' && !scannedIds.has(node.id)) {
+      node.status = 'stale';
+      node.metadata = { ...(node.metadata || {}), invalidated: 'source_deleted' };
+      node.updated_at = now;
+      stale.push(node.id);
+    }
   }
   const positioned = [];
   for (const node of graph.nodes) {
@@ -234,10 +268,31 @@ export function reconcileGraphs(codeGraph, contextGraph, { prune = true } = {}) 
     }
     positioned.push(node);
   }
-  const existing = new Set(graph.nodes.map((node) => node.id));
-  for (const module of codeGraph.modules) {
-    if (!existing.has(module.id)) {
-      graph.nodes.push({ id: module.id, title: module.id, label: module.id, type: 'code_module', source: 'code', path: module.path, mode: 'AUTO', metadata: { layer: 'implementation', language: module.language }, ...nextNodePosition(graph.nodes) });
+  const existing = new Map(graph.nodes.map((node) => [node.id, node]));
+  for (const discovered of implementationIndex.nodes) {
+    if (tombstones.has(discovered.id)) continue;
+    const current = existing.get(discovered.id);
+    if (current) {
+      current.path = discovered.path || current.path;
+      current.status = current.metadata?.invalidated === 'source_deleted' || current.status === 'stale' ? 'active' : current.status;
+      current.last_verified = now;
+      current.metadata = { ...(current.metadata || {}), ...(discovered.metadata || {}) };
+      delete current.metadata.invalidated;
+      continue;
+    }
+    const node = { ...discovered, type: discovered.type === 'implementation_file' ? 'code_module' : discovered.type, created_by: 'analyzer', confidence: 1, derived_from: [], last_verified: now, ...nextNodePosition(graph.nodes) };
+    graph.nodes.push(node);
+    existing.set(node.id, node);
+  }
+  const discoveredEdgeKeys = new Set(implementationIndex.edges.filter(edge => !tombstones.has(edge.source) && !tombstones.has(edge.target)).map(edge => `${edge.source}\0${edge.target}\0${edge.type}`));
+  graph.edges = graph.edges.filter(edge => edge.mode === 'MANUAL' || edge.mode === 'FORCE_INCLUDE' || edge.mode === 'FORCE_EXCLUDE' || edge.metadata?.source !== 'implementation-analyzer' || discoveredEdgeKeys.has(`${edge.source}\0${edge.target}\0${edge.type}`));
+  const graphEdgeKeys = new Set(graph.edges.map(edge => `${edge.source}\0${edge.target}\0${edge.type}`));
+  for (const edge of implementationIndex.edges) {
+    if (tombstones.has(edge.source) || tombstones.has(edge.target) || !existing.has(edge.source) || !existing.has(edge.target)) continue;
+    const key = `${edge.source}\0${edge.target}\0${edge.type}`;
+    if (!graphEdgeKeys.has(key)) {
+      graph.edges.push({ ...edge, metadata: { ...(edge.metadata || {}), source: 'implementation-analyzer' } });
+      graphEdgeKeys.add(key);
     }
   }
   const ids = new Set(codeGraph.modules.map((module) => module.id));
@@ -255,7 +310,13 @@ export function reconcileGraphs(codeGraph, contextGraph, { prune = true } = {}) 
   for (const edge of graph.edges) if (ids.has(edge.source) && ids.has(edge.target) && (edge.mode || 'AUTO') === 'AUTO' && ['dependency', 'interface', 'depends_on'].includes(edge.type) && !codeEdges.has(edgeKey(edge.source, edge.target))) {
     suggestions.push({ kind: 'stale', source: edge.source, target: edge.target, reason: `${edge.target} is no longer imported by ${edge.source}` });
   }
-  return { graph, codeGraph, suggestions, removed: [...removed] };
+  graph.cache = {
+    ...(graph.cache || {}),
+    revision: createHash('sha256').update(JSON.stringify({ modules: codeGraph.modules, edges: implementationIndex.edges })).digest('hex'),
+    invalidated: stale,
+    updated_at: now,
+  };
+  return { graph, codeGraph: { ...codeGraph, implementationIndex }, suggestions, removed: [], stale };
 }
 
 export async function ensureMemory(projectPath, graph) {
@@ -280,15 +341,94 @@ export async function ensureMemory(projectPath, graph) {
 }
 
 async function optionalRead(file) { try { return await readFile(file, 'utf8'); } catch (error) { if (error.code === 'ENOENT') return ''; throw error; } }
-function estimateTokens(text) { return Math.ceil([...text].reduce((sum, char) => sum + (char.charCodeAt(0) > 255 ? 1 : 0.25), 0)); }
+function projectFile(root, relativePath) {
+  const project = path.resolve(root);
+  const file = path.resolve(project, relativePath);
+  const relation = path.relative(project, file);
+  if (relation.startsWith('..') || path.isAbsolute(relation)) throw new Error(`Context file is outside project: ${relativePath}`);
+  return file;
+}
+const estimateTokens = estimateContextTokens;
 function taskTextIncludes(task, content) {
   const request = String(task || '').trim().replace(/\s+/g, ' ');
   const saved = String(content || '').trim().replace(/\s+/g, ' ');
   return request.length > 0 && saved.length > 0 && request.includes(saved);
 }
+function taskTerms(task) {
+  return String(task || '').toLowerCase().match(/[a-z_][a-z0-9_.:-]{2,}|[\u4e00-\u9fff]{2,}/g) || [];
+}
+function implementationSymbolScore(node, terms) {
+  const text = `${node.id} ${node.title || ''} ${node.label || ''} ${node.metadata?.signature || ''}`.toLowerCase();
+  return terms.reduce((score, term) => score + (text.includes(term) ? 1 : 0), 0);
+}
+async function implementationContent(root, node) {
+  if (!node.path) return '';
+  const content = await optionalRead(projectFile(root, node.path));
+  const start = Number(node.metadata?.start_line);
+  const end = Number(node.metadata?.end_line);
+  if (!Number.isInteger(start) || !Number.isInteger(end) || start < 1 || end < start) return content;
+  return content.split(/\r?\n/).slice(start - 1, end).join('\n');
+}
 function reusableContextFingerprint(items) {
   const reusable = items.filter(item => item.scope !== 'task').map(item => `${item.label}\0${item.content}`).join('\x1e');
   return createHash('sha256').update(reusable).digest('hex');
+}
+
+function contextGraphRevision(graph) {
+  const stable = {
+    nodes: graph.nodes.map(node => ({ id: node.id, type: node.type, status: node.status, mode: node.mode, content: node.content, path: node.path, updated_at: node.updated_at, metadata: node.metadata })),
+    edges: graph.edges,
+    mappings: graph.mappings,
+    overrides: graph.overrides,
+  };
+  return createHash('sha256').update(JSON.stringify(stable)).digest('hex');
+}
+
+function contextSource(node, scope) {
+  if (scope === 'project') return '.context/project.md';
+  if (scope === 'task') return 'current request';
+  if (scope === 'code' && node.path) return node.path;
+  return node.source || node.path || 'context graph';
+}
+
+function rawContextTokens(graph) {
+  return graph.nodes
+    .filter(node => node.type === 'conversation' || node.metadata?.raw === true)
+    .reduce((sum, node) => sum + estimateTokens(node.content || ''), 0);
+}
+
+function finalizeCompilation({ graph, entry, task, tokenBudget, candidates, excluded, forceExclude, policy }) {
+  const allocation = allocateContextBudget(candidates, { tokenBudget, policy, preExcluded: excluded });
+  const manifest = buildContextManifest({
+    task,
+    target: entry,
+    tokenBudget,
+    allocation,
+    forceExclude: [...forceExclude],
+    rawTokens: rawContextTokens(graph),
+    graphRevision: contextGraphRevision(graph),
+  });
+  const context = allocation.included.map(item => `## ${item.label}\n\n${item.content}`).join('\n\n');
+  const compiledFingerprint = createHash('sha256').update(`${entry || ''}\0${context}`).digest('hex');
+  return {
+    entry,
+    target: entry,
+    task,
+    tokenBudget,
+    estimatedTokens: allocation.selectedTokens,
+    candidateTokens: allocation.candidateTokens,
+    excludedTokens: allocation.excludedTokens,
+    rawTokens: manifest.rawTokens,
+    overBudget: allocation.overBudget,
+    valid: manifest.validation.valid,
+    validation: manifest.validation,
+    compiledFingerprint,
+    reusableContextFingerprint: reusableContextFingerprint(allocation.included),
+    included: manifest.included,
+    excluded: manifest.excluded,
+    manifest,
+    context,
+  };
 }
 
 async function git(projectPath, args) {
@@ -317,20 +457,25 @@ export async function compileContext(input) {
     if (node.mode === 'FORCE_INCLUDE') forcedInclude.add(node.id);
     if (node.mode === 'FORCE_EXCLUDE') forcedExclude.add(node.id);
   }
-  forcedExclude.delete(target);
   const candidates = [];
-  const add = (priority, label, content, module, scope, required = false) => { if (content.trim()) candidates.push({ priority, label, content: content.trim(), module, scope, required }); };
+  const add = (priority, label, content, module, scope, required = false, reason = 'legacy module context') => {
+    const node = nodeMap.get(module) || { id: module, type: scope === 'project' ? 'project_rule' : 'note', source: scope === 'project' ? 'project' : 'user' };
+    if (content.trim()) candidates.push({ priority, priorityName: node.priority, label, content: content.trim(), module, node: module, nodeType: node.type, status: node.status, scope, required, forceInclude: forcedInclude.has(module), reason, source: contextSource(node, scope), depth: module === target ? 0 : 1 });
+  };
   add(1000, 'User task', task, target, 'task', true);
   add(950, 'Project rules', await optionalRead(path.join(root, '.context', 'project.md')), null, 'project', true);
   const targetNode = nodeMap.get(target);
-  if (targetNode.path) add(920, `${target} source`, await optionalRead(path.join(root, targetNode.path)), target, 'code', true);
+  if (targetNode.path) add(920, `${target} source`, await optionalRead(projectFile(root, targetNode.path)), target, 'code', false, 'current target implementation');
   for (const [scope, priority] of [['context', 900], ['interface', 890], ['state', 850], ['decisions', 820]]) {
     add(priority, `${target} ${scope}`, await optionalRead(path.join(root, '.context', 'modules', encodeURIComponent(target), `${scope}.md`)), target, scope, true);
   }
   const selected = new Map();
   for (const edge of graph.edges.filter((item) => item.source === target)) {
     if (edge.mode === 'FORCE_EXCLUDE' || edge.type === 'force_exclude') forcedExclude.add(edge.target);
-    else selected.set(edge.target, edge);
+    else {
+      if (edge.mode === 'FORCE_INCLUDE' || edge.type === 'force_include') forcedInclude.add(edge.target);
+      selected.set(edge.target, edge);
+    }
   }
   for (const id of forcedInclude) if (nodeMap.has(id) && id !== target) selected.set(id, { target: id, scope: ['interface', 'state', 'decisions'], type: 'force_include', mode: 'FORCE_INCLUDE' });
   const excluded = [];
@@ -340,24 +485,15 @@ export async function compileContext(input) {
     for (const scope of scopes) {
       const priority = edge.mode === 'FORCE_INCLUDE' || edge.type === 'force_include' ? 780 : edge.type === 'optional' ? 300 : 650;
       const file = scope === 'code' ? nodeMap.get(id)?.path : path.join('.context', 'modules', encodeURIComponent(id), `${scope}.md`);
-      if (file) add(priority, `${id} ${scope}`, await optionalRead(path.join(root, file)), id, scope, false);
+      if (file) add(priority, `${id} ${scope}`, await optionalRead(scope === 'code' ? projectFile(root, file) : path.join(root, file)), id, scope, false, edge.mode === 'FORCE_INCLUDE' || edge.type === 'force_include' ? 'FORCE_INCLUDE' : `${edge.type} from ${target}`);
     }
   }
   const history = await gitSummary(root, targetNode.path);
   add(400, `${target} relevant git history`, history.history.join('\n'), target, 'history');
-  candidates.sort((a, b) => b.priority - a.priority);
-  const included = [];
-  let used = 0;
-  for (const item of candidates) {
-    const tokens = estimateTokens(item.content) + estimateTokens(item.label) + 10;
-    if (used + tokens <= tokenBudget || item.required) { included.push({ ...item, tokens }); used += tokens; }
-    else excluded.push({ module: item.module, scope: item.scope, reason: 'token budget', tokens });
-  }
-  const text = included.map((item) => `## ${item.label}\n\n${item.content}`).join('\n\n');
-  return { target, task, tokenBudget, estimatedTokens: used, overBudget: used > tokenBudget, reusableContextFingerprint: reusableContextFingerprint(included), included: included.map(({ content, ...item }) => item), excluded, context: text };
+  return finalizeCompilation({ graph, entry: target, task, tokenBudget, candidates, excluded, forceExclude: forcedExclude, policy: { ...(graph.policy || {}), ...(input.policy || {}) } });
 }
 
-export async function compileModularContext({ projectPath, graph, entry, task = '', tokenBudget = 16000, include = [], exclude = [], maxImplementationFiles = 3, semanticDepth = 3 }) {
+export async function compileModularContext({ projectPath, graph, entry, task = '', tokenBudget = 16000, include = [], exclude = [], maxImplementationFiles = 3, semanticDepth = 3, policy }) {
   const root = path.resolve(projectPath);
   const implementationLimit = Number.isInteger(maxImplementationFiles) ? Math.max(1, Math.min(5, maxImplementationFiles)) : 3;
   const semanticLimit = Number.isInteger(semanticDepth) ? Math.max(1, Math.min(3, semanticDepth)) : 3;
@@ -375,65 +511,172 @@ export async function compileModularContext({ projectPath, graph, entry, task = 
     const current = queue.shift(); const currentInfo = selected.get(current);
     if (forceExclude.has(current)) continue;
     if (currentInfo.depth >= semanticLimit) continue;
+    const currentNode = nodeMap.get(current);
     for (const edge of graph.edges) {
       if (edge.type === 'derived_from') continue; // Raw messages remain trace-only by default.
       const forward = edge.source === current;
+      const backward = edge.target === current;
+      if (!forward && !backward) continue;
+      // Traverse capability dependencies in their declared direction. Context
+      // leaves (requirements, interfaces, tests) may be collected in either
+      // direction, but are never used as hubs to reach sibling modules.
       if (edge.type === 'targets' && !forward) continue;
-      if (['dependency', 'reference', 'calls'].includes(edge.type) && nodeMap.get(current)?.type === 'functional') continue;
-      const next = forward ? edge.target : edge.target === current ? edge.source : null;
+      if (['depends_on', 'requires', 'uses', 'consumes', 'produces', 'feeds', 'transforms', 'triggers'].includes(edge.type) && !forward) continue;
+      if (['dependency', 'reference', 'calls'].includes(edge.type) && currentNode?.type === 'functional') continue;
+      const next = forward ? edge.target : edge.source;
       if (!next || !nodeMap.has(next) || forceExclude.has(next)) continue;
       // Tasks are entry points. Do not pull old tasks back in through a shared target.
       if (nodeMap.get(next)?.type === 'task' && next !== entry) continue;
-      if (nodeMap.get(current)?.type === 'functional' && (nodeMap.get(next)?.type === 'code_module' || nodeMap.get(next)?.type?.startsWith('implementation_'))) continue;
-      if (edge.mode === 'FORCE_EXCLUDE' || edge.type === 'force_exclude') { forceExclude.add(next); continue; }
-      if (!selected.has(next)) { selected.set(next, { depth: currentInfo.depth + 1, reason: `${edge.type} ${edge.source === current ? 'from' : 'to'} ${current}`, scope: edge.scope || [] }); queue.push(next); }
+      // Explicit edge overrides are directional and outrank semantic traversal
+      // rules, including the Functional -> Implementation boundary below.
+      if (forward && (edge.mode === 'FORCE_EXCLUDE' || edge.type === 'force_exclude')) {
+        forceExclude.add(next);
+        forceInclude.delete(next);
+        selected.delete(next);
+        continue;
+      }
+      if (forward && (edge.mode === 'FORCE_INCLUDE' || edge.type === 'force_include')) {
+        forceInclude.add(next);
+        continue;
+      }
+      if (!['task', 'functional', 'code_module'].includes(currentNode?.type) && !currentNode?.type?.startsWith('implementation_')) continue;
+      if (edge.type === 'targets' && currentNode?.type === 'task' && (nodeMap.get(next)?.type === 'code_module' || nodeMap.get(next)?.type?.startsWith('implementation_'))) {
+        const functionalTargets = (graph.mappings || []).filter(mapping => (mapping.implementation || []).some(item => (typeof item === 'string' ? item : item.id) === next)).map(mapping => mapping.functional).filter(id => nodeMap.get(id)?.type === 'functional' && !forceExclude.has(id));
+        if (functionalTargets.length) {
+          for (const functional of functionalTargets) if (!selected.has(functional)) {
+            selected.set(functional, { depth: currentInfo.depth + 1, reason: `functional mapping for task target ${next}`, scope: ['content', 'interface', 'contract'] });
+            queue.push(functional);
+          }
+          continue;
+        }
+      }
+      if (currentNode?.type === 'functional' && (nodeMap.get(next)?.type === 'code_module' || nodeMap.get(next)?.type?.startsWith('implementation_'))) continue;
+      if (!selected.has(next)) {
+        const nextNode = nodeMap.get(next);
+        selected.set(next, { depth: currentInfo.depth + 1, reason: `${edge.type} ${forward ? 'from' : 'to'} ${current}`, scope: edge.scope || [] });
+        const expandable = nextNode.type === 'functional'
+          || nextNode.type === 'task'
+          || (edge.type === 'targets' && (nextNode.type === 'code_module' || nextNode.type?.startsWith('implementation_')));
+        if (expandable) queue.push(next);
+      }
     }
   }
-  // A Functional Node is the semantic boundary. Resolve only its relevant
-  // implementation mapping after semantic traversal; never expand file calls.
-  for (const [id] of [...selected]) if (nodeMap.get(id)?.type === 'functional') {
+  // A Functional Node is the semantic boundary. Resolve mapping overrides
+  // before relevance ranking so FORCE_EXCLUDE always wins and FORCE_INCLUDE
+  // is not constrained by the normal implementation limit.
+  const selectedFunctions = [...selected].filter(([id, selection]) => nodeMap.get(id)?.type === 'functional'
+    && (id === entry
+      || selection.scope.includes('code')
+      || selection.reason.startsWith('targets ')
+      || selection.reason.startsWith('functional mapping for task target ')));
+  for (const [id] of selectedFunctions) {
+    const mappings = (graph.mappings || []).filter(mapping => mapping.functional === id);
+    for (const mapping of mappings.filter(item => item.mode === 'FORCE_EXCLUDE')) {
+      for (const implementation of mapping.implementation || []) {
+        const implementationId = typeof implementation === 'string' ? implementation : implementation.id;
+        if (!implementationId) continue;
+        forceExclude.add(implementationId);
+        forceInclude.delete(implementationId);
+        selected.delete(implementationId);
+      }
+    }
+    for (const mapping of mappings.filter(item => item.mode === 'FORCE_INCLUDE')) {
+      for (const implementation of mapping.implementation || []) {
+        const implementationId = typeof implementation === 'string' ? implementation : implementation.id;
+        if (implementationId && !forceExclude.has(implementationId)) forceInclude.add(implementationId);
+      }
+    }
+  }
+  // Resolve only task-relevant implementation after semantic traversal;
+  // never expand file calls through the implementation graph.
+  for (const [id] of selectedFunctions) {
     for (const implementation of implementationForFunctional(graph, id, task, implementationLimit)) {
       if (nodeMap.has(implementation.id) && !forceExclude.has(implementation.id) && !selected.has(implementation.id)) {
         selected.set(implementation.id, { depth: 2, reason: `implemented_by ${id}`, scope: ['code', 'interface'] });
       }
     }
   }
-  for (const id of forceInclude) if (nodeMap.has(id)) selected.set(id, { depth: 0, reason: 'FORCE_INCLUDE', scope: ['content', 'interface', 'contract', 'state', 'decisions'] });
-  forceExclude.delete(entry);
+  // When the scanned implementation graph has symbol boundaries, narrow a
+  // mapped file to task-matching symbols. Whole-file loading remains the
+  // fallback when no symbol can be identified.
+  const terms = taskTerms(task);
+  for (const [id, selection] of [...selected]) {
+    const node = nodeMap.get(id);
+    if (!node || (node.type !== 'code_module' && node.type !== 'implementation_file') || !selection.scope.includes('code')) continue;
+    const descendants = [];
+    const pending = [id];
+    const seen = new Set(pending);
+    while (pending.length) {
+      const parent = pending.shift();
+      for (const edge of graph.edges) if (edge.type === 'contains' && edge.source === parent && !seen.has(edge.target) && nodeMap.has(edge.target)) {
+        seen.add(edge.target);
+        pending.push(edge.target);
+        descendants.push(nodeMap.get(edge.target));
+      }
+    }
+    const matching = descendants.map(symbol => ({ symbol, score: implementationSymbolScore(symbol, terms) })).filter(item => item.score > 0).sort((left, right) => right.score - left.score || left.symbol.id.localeCompare(right.symbol.id)).slice(0, 3);
+    if (!matching.length) continue;
+    selection.scope = selection.scope.filter(scope => scope !== 'code');
+    for (const { symbol } of matching) if (!forceExclude.has(symbol.id)) selected.set(symbol.id, { depth: selection.depth + 1, reason: `task-relevant symbol in ${id}`, scope: ['code', 'interface'] });
+  }
+  for (const id of forceInclude) if (nodeMap.has(id)) {
+    const node = nodeMap.get(id);
+    const implementation = node.type === 'code_module' || node.type?.startsWith('implementation_');
+    selected.set(id, {
+      depth: 0,
+      reason: 'FORCE_INCLUDE',
+      scope: implementation
+        ? ['content', 'code', 'interface', 'contract', 'state', 'decisions']
+        : ['content', 'interface', 'contract', 'state', 'decisions'],
+    });
+  }
   const candidates = [];
-  const excluded = [...forceExclude].filter(id => nodeMap.has(id) && id !== entry).map(id => ({ node: id, module: id, reason: 'FORCE_EXCLUDE' }));
-  const add = (priority, label, content, node, scope, reason, required = false) => { if (content?.trim()) candidates.push({ priority, label, content: content.trim(), module: node.id, node: node.id, nodeType: node.type, scope, reason, required }); };
+  const excluded = [...forceExclude].filter(id => nodeMap.has(id)).map(id => {
+    const node = nodeMap.get(id);
+    return { node: id, module: id, nodeType: node.type, status: node.status, source: contextSource(node, 'content'), policyClass: node.mode === 'FORCE_INCLUDE' ? 'hard' : undefined, reason: 'FORCE_EXCLUDE', tokens: estimateTokens(node.content || '') };
+  });
+  const add = (priority, label, content, node, scope, reason, required = false, depth = 1) => {
+    if (content?.trim()) candidates.push({ priority, priorityName: node.priority, label, content: content.trim(), module: node.id, node: node.id, nodeType: node.type, status: node.status, scope, reason, required, forceInclude: node.mode === 'FORCE_INCLUDE' || reason === 'FORCE_INCLUDE', source: contextSource(node, scope), depth });
+  };
   if (task.trim()) add(1000, 'User task', task, nodeMap.get(entry), 'task', 'current request', true);
   add(950, 'Project rules', await optionalRead(path.join(root, '.context', 'project.md')), nodeMap.get(entry), 'project', 'project rule', true);
   for (const [id, selection] of selected) {
     const node = nodeMap.get(id);
+    const currentFunctionalTarget = node.type === 'functional'
+      && (id === entry || selection.reason.startsWith('targets ') || selection.reason.startsWith('functional mapping for task target '));
     if (forceExclude.has(id)) continue;
-    if (node.status !== 'active' && id !== entry) { excluded.push({ node: id, module: id, reason: node.status }); continue; }
-    if (node.type === 'conversation' || node.metadata?.raw === true) { excluded.push({ node: id, module: id, reason: 'raw source is trace-only' }); continue; }
+    if (node.status !== 'active' && !forceInclude.has(id)) {
+      const omitted = { node: id, module: id, nodeType: node.type, status: node.status, scope: 'content', source: contextSource(node, 'content'), reason: node.status, required: currentFunctionalTarget, tokens: estimateTokens(node.content || '') };
+      omitted.policyClass = classifyContextCandidate(omitted);
+      excluded.push(omitted);
+      continue;
+    }
+    if ((node.type === 'conversation' || node.metadata?.raw === true) && !forceInclude.has(id)) {
+      excluded.push({ node: id, module: id, nodeType: node.type, status: node.status, source: contextSource(node, 'content'), reason: 'raw source is trace-only', tokens: estimateTokens(node.content || '') });
+      continue;
+    }
     const priority = node.priority === 'critical' ? 940 : node.priority === 'high' ? 900 : selection.depth === 0 ? 880 : 680 - selection.depth * 40;
     const duplicatedCurrentTask = id === entry && node.type === 'task' && taskTextIncludes(task, node.content);
-    if (node.content && node.type !== 'functional' && !duplicatedCurrentTask) add(priority, `${node.title} (${node.type})`, node.content, node, 'content', selection.reason, id === entry && node.type !== 'code_module');
+    if (node.content && node.type !== 'functional' && !duplicatedCurrentTask) add(priority, `${node.title} (${node.type})`, node.content, node, 'content', selection.reason, id === entry && node.type !== 'code_module', selection.depth);
     if (node.type === 'functional') {
       const detail = [node.description || node.content, node.provides?.length ? `Provides: ${node.provides.join(', ')}` : '', node.consumes?.length ? `Consumes: ${node.consumes.join(', ')}` : '', node.inputs?.length ? `Input: ${node.inputs.join(', ')}` : '', node.outputs?.length ? `Output: ${node.outputs.join(', ')}` : ''].filter(Boolean).join('\n');
-      if (detail) add(priority, `${node.title} (functional)`, detail, node, 'content', selection.reason, id === entry);
+      if (detail) add(priority, `${node.title} (functional)`, detail, node, 'content', selection.reason, currentFunctionalTarget, selection.depth);
     }
     if (node.type === 'code_module' || node.type?.startsWith('implementation_')) {
       const scopes = selection.scope.length ? selection.scope : id === entry ? ['code', 'context', 'interface', 'state', 'decisions'] : ['interface', 'contract'];
       for (const scope of scopes) {
         if (scope === 'content' || scope === 'contract') continue;
         const file = scope === 'code' ? node.path : path.join('.context', 'modules', encodeURIComponent(id), `${scope}.md`);
-        if (file) add(priority + (scope === 'code' && id === entry ? 30 : 0), `${node.title} ${scope}`, await optionalRead(path.join(root, file)), node, scope, selection.reason, id === entry && scope === 'code');
+        const content = scope === 'code' ? await implementationContent(root, node) : file ? await optionalRead(path.join(root, file)) : '';
+        if (file) add(priority + (scope === 'code' && id === entry ? 30 : 0), `${node.title} ${scope}`, content, node, scope, selection.reason, false, selection.depth);
       }
     }
   }
-  candidates.sort((left, right) => right.priority - left.priority);
-  const included = []; let used = 0;
-  for (const item of candidates) {
-    const tokens = estimateTokens(item.content) + estimateTokens(item.label) + 10;
-    if (used + tokens <= tokenBudget || item.required) { included.push({ ...item, tokens }); used += tokens; }
-    else excluded.push({ node: item.node, module: item.module, scope: item.scope, reason: 'token budget', tokens });
+  for (const node of graph.nodes) {
+    if (selected.has(node.id) || forceExclude.has(node.id)) continue;
+    excluded.push({ node: node.id, module: node.id, nodeType: node.type, status: node.status, source: contextSource(node, 'content'), score: 0, tokens: estimateTokens(node.content || ''), reason: node.type === 'conversation' || node.metadata?.raw === true ? 'raw context disabled by policy' : 'not selected by semantic traversal' });
   }
-  return { entry, target: entry, task, tokenBudget, estimatedTokens: used, overBudget: used > tokenBudget, reusableContextFingerprint: reusableContextFingerprint(included), included: included.map(({ content, ...item }) => item), excluded, context: included.map(item => `## ${item.label}\n\n${item.content}`).join('\n\n') };
+  return finalizeCompilation({ graph, entry, task, tokenBudget, candidates, excluded, forceExclude, policy: { ...(graph.policy || {}), ...(policy || {}) } });
 }
 
 export async function listProjects(parentPath) {

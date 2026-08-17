@@ -1,7 +1,7 @@
 export function latestUserText(messages) {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
-    if (message?.role !== 'user' || message?.source?.kind === 'plugin') continue;
+    if (message?.role !== 'user' || ['plugin', 'tool'].includes(message?.source?.kind)) continue;
     const content = Array.isArray(message.content) ? message.content : [];
     return content.filter(block => block?.type === 'text').map(block => block.text || '').join('\n').trim();
   }
@@ -18,7 +18,8 @@ export function inferTarget(task, nodes) {
 }
 
 export function preview(result, includeContent) {
-  return { target: result.target, tokenBudget: result.tokenBudget, estimatedTokens: result.estimatedTokens, overBudget: result.overBudget, included: result.included, excluded: result.excluded, ...(includeContent ? { context: result.context } : {}) };
+  const { context, ...summary } = result;
+  return { ...summary, ...(includeContent ? { context } : {}) };
 }
 
 export function escapeAttribute(value) {

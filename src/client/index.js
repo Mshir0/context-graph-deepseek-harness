@@ -14,8 +14,12 @@ const TASK_WORKFLOW_STYLES = String.raw`
 .cg-header{position:relative;z-index:5}.cg-node-menu-anchor{position:relative;display:inline-flex}.cg-node-menu{position:absolute;right:0;top:34px;z-index:10;display:grid;min-width:132px;padding:4px;background:#fff;border:1px solid var(--cg-line);border-radius:6px;box-shadow:0 10px 24px #00000018}.cg-node-menu-item{border:0;border-radius:4px;background:transparent;color:#27272a;padding:6px 8px;text-align:left;font:inherit;cursor:pointer}.cg-node-menu-item:hover{background:#f4f4f5;color:#111827}.cg-context-menu button:disabled{opacity:.55!important;cursor:default!important}.cg-context-actions{display:flex!important;gap:7px!important;margin-top:10px!important}.cg-context-menu .cg-context-actions button{flex:1!important;margin:0!important}.cg-context-menu button.cg-context-secondary{background:#f3f4f6!important;color:#374151!important}.cg-context-menu button.cg-context-secondary:hover{background:#e5e7eb!important}.cg-context-message{margin:8px 0 0!important;color:#64748b!important;font-size:12px!important;line-height:17px!important}.cg-context-message[data-error=true]{color:#b91c1c!important}.cg-context-divider{height:1px!important;margin:14px 0!important;background:#e5e7eb!important}.cg-canvas,.cg-canvas *{user-select:none;-webkit-user-select:none}
 body[data-ds-dark-theme] .cg-node-menu{background:#202023;border-color:#3f3f46;box-shadow:0 10px 24px #0008}body[data-ds-dark-theme] .cg-node-menu-item{color:#e4e4e7}body[data-ds-dark-theme] .cg-node-menu-item:hover{background:#2b2b30;color:#fff}body[data-ds-dark-theme] .cg-context-menu button.cg-context-secondary{background:#303036!important;color:#e4e4e7!important}body[data-ds-dark-theme] .cg-context-menu button.cg-context-secondary:hover{background:#3b3b42!important}body[data-ds-dark-theme] .cg-context-divider{background:#3f3f46!important}
 .cg-side-panel{position:absolute;z-index:6;top:12px;right:12px;bottom:12px;width:min(420px,calc(100% - 24px));display:flex;flex-direction:column;overflow:hidden;background:var(--cg-bg);color:var(--cg-text);border:1px solid var(--cg-line);border-radius:8px;box-shadow:0 12px 34px #0002}.cg-side-panel button:focus-visible{outline:2px solid #60a5fa;outline-offset:1px}.cg-panel-head{display:flex;align-items:center;gap:10px;min-height:58px;padding:9px 10px 9px 12px;border-bottom:1px solid var(--cg-line);background:var(--cg-bg);flex:0 0 auto}.cg-panel-heading{min-width:0;flex:1}.cg-panel-kicker{display:block;color:var(--cg-muted);font-size:10px;line-height:15px}.cg-panel-title{display:block;font-size:14px;font-weight:650;line-height:20px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cg-panel-subtitle{display:block;margin-top:1px;color:var(--cg-muted);font-size:11px;line-height:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cg-panel-head>.cg-icon{flex:0 0 auto}.cg-panel-body{flex:1;min-height:0;overflow:auto;padding:12px}.cg-panel-actions{display:flex;justify-content:flex-end;gap:8px;padding:10px 12px;border-top:1px solid var(--cg-line);background:var(--cg-bg);flex:0 0 auto}.cg-panel-button{min-width:76px;height:32px;border:1px solid transparent;border-radius:6px;padding:0 12px;font:500 13px/30px Inter,ui-sans-serif,system-ui,sans-serif;cursor:pointer}.cg-panel-button:disabled{opacity:.45;cursor:default}.cg-panel-primary{background:var(--cg-accent);color:#fff}.cg-panel-primary:hover:not(:disabled){background:#1d4ed8}.cg-panel-secondary{border-color:var(--cg-line);background:var(--cg-bg);color:var(--cg-text)}.cg-panel-secondary:hover{background:var(--cg-soft)}.cg-preview-summary{padding-bottom:12px;border-bottom:1px solid var(--cg-line)}.cg-summary-row{display:flex;align-items:baseline;justify-content:space-between;gap:12px}.cg-summary-label{color:var(--cg-muted);font-size:12px}.cg-summary-value{font-size:13px;font-weight:650;white-space:nowrap}.cg-preview-summary[data-over=true] .cg-summary-value{color:#dc2626}.cg-budget-bar{height:5px;margin-top:8px;overflow:hidden;border-radius:3px;background:var(--cg-soft)}.cg-budget-bar>span{display:block;height:100%;border-radius:inherit;background:var(--cg-accent);transition:width .18s ease}.cg-budget-bar[data-over=true]>span{background:#dc2626}.cg-budget-caption{display:block;margin-top:5px;color:var(--cg-muted);font-size:11px}.cg-panel-section{margin-top:16px}.cg-panel-section-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:5px}.cg-panel-section-title{margin:0;font-size:12px;font-weight:650}.cg-panel-count{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:18px;padding:0 6px;border-radius:5px;background:var(--cg-soft);color:var(--cg-muted);font-size:10px}.cg-panel-task{margin:0;color:var(--cg-text);font-size:12px;line-height:1.55;overflow-wrap:anywhere;white-space:pre-wrap}.cg-context-list,.cg-proposal-list{display:grid}.cg-context-item{display:flex;align-items:center;gap:8px;min-width:0;padding:9px 0;border-bottom:1px solid var(--cg-line)}.cg-context-item:last-child,.cg-proposal-item:last-child{border-bottom:0}.cg-context-item-main{min-width:0;flex:1}.cg-context-item-title{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:550}.cg-context-item-meta,.cg-context-item-reason{display:block;margin-top:2px;color:var(--cg-muted);font-size:11px;line-height:15px;overflow-wrap:anywhere}.cg-context-item>.cg-icon{width:26px;height:26px;flex:0 0 auto;font-size:14px}.cg-panel-empty{padding:10px 0;color:var(--cg-muted);font-size:12px}.cg-proposal-summary{display:flex;align-items:center;gap:8px;padding-bottom:12px;border-bottom:1px solid var(--cg-line);color:var(--cg-muted);font-size:12px}.cg-proposal-summary strong{color:var(--cg-text);font-size:13px}.cg-proposal-summary-separator{color:var(--cg-line)}.cg-proposal-item{padding:11px 0;border-bottom:1px solid var(--cg-line)}.cg-proposal-item-head{display:flex;align-items:baseline;gap:8px;min-width:0}.cg-proposal-item-title{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:650}.cg-proposal-item-count{flex:0 0 auto;color:var(--cg-muted);font-size:11px}.cg-proposal-paths{display:grid;gap:3px;margin-top:6px}.cg-proposal-path{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--cg-muted);font:11px/16px ui-monospace,SFMono-Regular,Consolas,monospace}.cg-proposal-confidence{margin-top:5px;color:var(--cg-muted);font-size:10px}.cg-panel-warning{margin:10px 0 0;padding:8px 9px;border-left:2px solid #d97706;background:var(--cg-soft);color:var(--cg-muted);font-size:11px;line-height:16px;overflow-wrap:anywhere}
+.cg-level-filter{max-width:88px}.cg-node-expand{cursor:pointer}.cg-node-expand rect{fill:var(--cg-bg);stroke:var(--cg-line)}.cg-node-expand text{fill:var(--cg-muted);font-size:13px;font-weight:650;pointer-events:none}.cg-node-expand:hover rect{stroke:var(--cg-accent)}.cg-node-expand:hover text{fill:var(--cg-accent)}
+.cg-node[data-status=stale]{opacity:.62}.cg-node[data-status=stale] .cg-node-box{stroke-dasharray:5 3}.cg-edge[data-stale=true]{opacity:.48;stroke-dasharray:5 4}
+.cg-audit-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px;margin-top:8px}.cg-audit-cell{min-width:0;padding:7px 5px;border:1px solid var(--cg-line);border-radius:5px;background:var(--cg-soft);text-align:center}.cg-audit-label{display:block;color:var(--cg-muted);font-size:9px;line-height:13px}.cg-audit-value{display:block;margin-top:2px;overflow:hidden;text-overflow:ellipsis;font-size:11px;font-weight:650;white-space:nowrap}.cg-validation{display:flex;align-items:flex-start;gap:8px;margin-top:9px;padding:8px 9px;border:1px solid var(--cg-line);border-radius:5px;background:var(--cg-soft)}.cg-validation-mark{flex:0 0 auto;color:#71717a;font-weight:700}.cg-validation[data-status=valid] .cg-validation-mark{color:#15803d}.cg-validation[data-status=invalid] .cg-validation-mark{color:#dc2626}.cg-validation-main{min-width:0}.cg-validation-title{display:block;font-size:11px;font-weight:650}.cg-validation-issue{display:block;margin-top:2px;color:var(--cg-muted);font-size:10px;line-height:14px;overflow-wrap:anywhere}.cg-context-item-fields{display:flex;flex-wrap:wrap;gap:3px 8px;margin-top:3px;color:var(--cg-muted);font-size:10px;line-height:14px}.cg-context-item-fields span{min-width:0;overflow-wrap:anywhere}.cg-context-item-fields strong{color:var(--cg-text);font-weight:550}.cg-context-item[data-policy=hard]{border-left:2px solid #dc2626;padding-left:7px}.cg-context-item[data-policy=optional]{opacity:.82}
 body[data-ds-dark-theme] .cg-side-panel,body[data-ds-dark-theme] .cg-panel-head,body[data-ds-dark-theme] .cg-panel-actions{background:#202023;border-color:#3f3f46}body[data-ds-dark-theme] .cg-panel-secondary{background:#202023;border-color:#48484f;color:#f4f4f5}body[data-ds-dark-theme] .cg-panel-secondary:hover,body[data-ds-dark-theme] .cg-side-panel .cg-icon:hover{background:#2b2b30;color:#fff}body[data-ds-dark-theme] .cg-panel-primary{background:#3b82f6}body[data-ds-dark-theme] .cg-panel-primary:hover:not(:disabled){background:#2563eb}body[data-ds-dark-theme] .cg-preview-summary,body[data-ds-dark-theme] .cg-context-item,body[data-ds-dark-theme] .cg-proposal-summary,body[data-ds-dark-theme] .cg-proposal-item{border-color:#3f3f46}body[data-ds-dark-theme] .cg-panel-count,body[data-ds-dark-theme] .cg-budget-bar,body[data-ds-dark-theme] .cg-panel-warning{background:#2b2b30}
-@media(max-width:560px){.cg-side-panel{top:8px;right:8px;bottom:8px;left:8px;width:auto}.cg-panel-actions{padding-bottom:max(10px,env(safe-area-inset-bottom))}}
+@media(max-width:780px){.cg-header{gap:2px;padding:0 5px;overflow-x:auto;scrollbar-width:none}.cg-header::-webkit-scrollbar{display:none}.cg-title,.cg-search{display:none}.cg-filter{max-width:88px}.cg-icon{width:28px}}
+@media(max-width:560px){.cg-type-filter{display:none}.cg-side-panel{top:8px;right:8px;bottom:8px;left:8px;width:auto}.cg-panel-actions{padding-bottom:max(10px,env(safe-area-inset-bottom))}.cg-audit-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 `;
 
 const API = '/context-graph/api';
@@ -24,11 +28,13 @@ const MODES = ['AUTO', 'MANUAL', 'FORCE_INCLUDE', 'FORCE_EXCLUDE'];
 const SCOPES = ['code', 'context', 'interface', 'contract', 'state', 'decisions', 'history', 'content'];
 const NODE_TYPES = ['functional', 'code_module', 'implementation_file', 'implementation_class', 'implementation_function', 'implementation_package', 'implementation_symbol', 'requirement', 'task', 'constraint', 'decision', 'interface', 'documentation', 'conversation', 'artifact', 'test', 'issue', 'note', 'project_rule'];
 const PRIORITIES = ['critical', 'high', 'normal', 'low'];
-const STATUSES = ['active', 'resolved', 'deprecated', 'superseded', 'archived'];
+const STATUSES = ['active', 'resolved', 'deprecated', 'superseded', 'archived', 'stale'];
 const TASKS = [['develop', '开发'], ['debug', '调试'], ['refactor', '重构'], ['test', '测试'], ['review', '审查'], ['docs', '文档']];
 const CREATE_NODE_TYPES = [['functional', '功能', '新建功能'], ['task', '任务', '新建任务'], ['requirement', '需求', '新建需求'], ['constraint', '约束', '新建约束'], ['decision', '决策', '新建决策'], ['issue', '问题', '新建问题'], ['note', '备注', '新建备注']];
 const CONTEXT_BUDGETS = [2000, 4000, 6000, 8000, 12000, 16000];
 const DEFAULT_SESSION_CONTEXT = { autoInject: true, tokenBudget: 6000, reuseContext: true, maxImplementationFiles: 2, semanticDepth: 2, include: [], exclude: [] };
+const IMPLEMENTATION_LEVELS = [['0', '文件'], ['1', '类'], ['2', '函数'], ['3', '符号']];
+const IMPLEMENTATION_TYPES = new Set(['code_module', 'implementation_file', 'implementation_class', 'implementation_function', 'implementation_package', 'implementation_symbol']);
 const NODE_W = 178;
 const NODE_H = 88;
 const DOUBLE_PRESS_MS = 360;
@@ -68,6 +74,159 @@ function truncateNodeText(value, maxWidth, fontSize) {
     width += characterWidth;
   }
   return output;
+}
+
+function isImplementationNode(node) {
+  return IMPLEMENTATION_TYPES.has(node?.type || 'code_module');
+}
+
+function implementationLevel(node) {
+  if (node?.type === 'implementation_class') return 1;
+  if (node?.type === 'implementation_function') return 2;
+  if (node?.type === 'implementation_symbol') return 3;
+  return 0;
+}
+
+function buildImplementationHierarchy(graph) {
+  const implementation = (graph?.nodes || []).filter(isImplementationNode);
+  const nodeMap = new Map(implementation.map(node => [node.id, node]));
+  const parents = new Map();
+  const setParent = (child, parent) => {
+    if (child !== parent && nodeMap.has(child) && nodeMap.has(parent) && !parents.has(child)) parents.set(child, parent);
+  };
+  for (const edge of graph?.edges || []) if (edge.type === 'contains') setParent(edge.target, edge.source);
+  for (const node of implementation) {
+    const metadata = node.metadata || {};
+    const explicit = metadata.parentId || metadata.parent_id || metadata.parent || metadata.containerId || metadata.container_id || metadata.container || metadata.owner;
+    if (typeof explicit === 'string') setParent(node.id, explicit);
+  }
+  for (const node of implementation) {
+    if (parents.has(node.id) || implementationLevel(node) === 0) continue;
+    const lower = implementation.filter(candidate => candidate.id !== node.id && implementationLevel(candidate) < implementationLevel(node));
+    const prefixed = lower.filter(candidate => node.id.startsWith(`${candidate.id}.`) || node.id.startsWith(`${candidate.id}:`) || node.id.startsWith(`${candidate.id}#`)).sort((left, right) => right.id.length - left.id.length);
+    const samePath = lower.filter(candidate => node.path && candidate.path === node.path);
+    const deepest = samePath.length ? Math.max(...samePath.map(implementationLevel)) : -1;
+    const deepestCandidates = samePath.filter(candidate => implementationLevel(candidate) === deepest);
+    const fileCandidates = samePath.filter(candidate => implementationLevel(candidate) === 0);
+    const parent = prefixed[0] || (deepestCandidates.length === 1 ? deepestCandidates[0] : fileCandidates.length === 1 ? fileCandidates[0] : null);
+    if (parent) setParent(node.id, parent.id);
+  }
+  const children = new Map(implementation.map(node => [node.id, []]));
+  for (const [child, parent] of parents) children.get(parent)?.push(child);
+  const ancestorsOf = id => {
+    const result = [];
+    const seen = new Set([id]);
+    let current = parents.get(id);
+    while (current && !seen.has(current)) { result.push(current); seen.add(current); current = parents.get(current); }
+    return result;
+  };
+  const descendantsOf = id => {
+    const result = [];
+    const queue = [...(children.get(id) || [])];
+    const seen = new Set();
+    while (queue.length) { const current = queue.shift(); if (seen.has(current)) continue; seen.add(current); result.push(current); queue.push(...(children.get(current) || [])); }
+    return result;
+  };
+  return { parents, children, ancestorsOf, descendantsOf };
+}
+
+function containedImplementationDescendants(graph, id) {
+  const implementation = new Set((graph?.nodes || []).filter(isImplementationNode).map(node => node.id));
+  const children = new Map();
+  for (const edge of graph?.edges || []) {
+    if (edge.type !== 'contains' || !implementation.has(edge.source) || !implementation.has(edge.target)) continue;
+    if (!children.has(edge.source)) children.set(edge.source, []);
+    children.get(edge.source).push(edge.target);
+  }
+  const result = [];
+  const seen = new Set([id]);
+  const queue = [...(children.get(id) || [])];
+  while (queue.length) {
+    const current = queue.shift();
+    if (seen.has(current)) continue;
+    seen.add(current);
+    result.push(current);
+    queue.push(...(children.get(current) || []));
+  }
+  return result;
+}
+
+function normalizeManifestItem(item) {
+  return typeof item === 'string' ? { node: item, module: item } : item || {};
+}
+
+function contextManifest(data = {}) {
+  const manifest = data.manifest && typeof data.manifest === 'object' ? data.manifest : {};
+  return {
+    manifest,
+    included: (manifest.included || data.included || []).map(normalizeManifestItem),
+    excluded: (manifest.excluded || data.excluded || []).map(normalizeManifestItem),
+    audit: { ...data, ...manifest, ...(data.audit || {}), ...(manifest.audit || {}) },
+    validation: data.audit?.validation ?? manifest.validation ?? data.validation,
+  };
+}
+
+function tokenMetric(audit, aliases, fallback = null) {
+  for (const key of aliases) {
+    const value = audit?.[key];
+    if ((typeof value === 'number' || typeof value === 'string' && value.trim()) && Number.isFinite(Number(value))) return Math.max(0, Number(value));
+    if (value && Number.isFinite(Number(value.tokens))) return Math.max(0, Number(value.tokens));
+  }
+  return fallback;
+}
+
+function manifestAudit(data, included, excluded, audit) {
+  const selectedFallback = Number.isFinite(Number(data.estimatedTokens)) ? Math.max(0, Number(data.estimatedTokens)) : null;
+  const selected = tokenMetric(audit, ['selectedTokens', 'selected_tokens', 'selectedContextTokens', 'selected_context_tokens', 'selected'], selectedFallback);
+  const excludedFallback = excluded.some(item => Number.isFinite(Number(item.tokens))) ? excluded.reduce((sum, item) => sum + (Number(item.tokens) || 0), 0) : null;
+  const excludedTokens = tokenMetric(audit, ['excludedTokens', 'excluded_tokens', 'excludedContextTokens', 'excluded_context_tokens', 'excluded'], excludedFallback);
+  return {
+    raw: tokenMetric(audit, ['rawTokens', 'raw_tokens', 'rawContextTokens', 'raw_context_tokens', 'totalRawTokens', 'total_raw_tokens', 'raw']),
+    candidate: tokenMetric(audit, ['candidateTokens', 'candidate_tokens', 'candidateContextTokens', 'candidate_context_tokens', 'candidate'], selected !== null && excludedTokens !== null ? selected + excludedTokens : null),
+    selected,
+    excluded: excludedTokens,
+    final: tokenMetric(audit, ['finalEstimatedTotalTokens', 'final_estimated_total_tokens', 'finalTokens', 'final_tokens', 'finalRequestTokens', 'final_request_tokens', 'final']),
+  };
+}
+
+function validationSummary(value, overBudget) {
+  if (typeof value === 'boolean') return { status: value ? 'valid' : 'invalid', label: value ? '验证通过' : '验证失败', issues: [] };
+  if (value && typeof value === 'object') {
+    const errors = value.errors || value.issues || value.violations || [];
+    const warnings = value.warnings || [];
+    const normalizedErrors = Array.isArray(errors) ? errors : [String(errors)];
+    const normalizedWarnings = (Array.isArray(warnings) ? warnings : [String(warnings)]).map(item => typeof item === 'string' ? `警告：${item}` : { ...item, message: `警告：${item.message || item.reason || JSON.stringify(item)}` });
+    const passed = value.valid ?? value.passed ?? value.ok ?? (normalizedErrors.length ? false : typeof value.status === 'string' ? /^(valid|passed|ok)$/i.test(value.status) : undefined);
+    return { status: passed === true ? 'valid' : passed === false ? 'invalid' : 'unknown', label: passed === true ? '验证通过' : passed === false ? '验证失败' : '尚未验证', issues: [...normalizedErrors, ...normalizedWarnings] };
+  }
+  if (overBudget) return { status: 'invalid', label: '预算验证失败', issues: ['最终上下文超过预算'] };
+  return { status: 'unknown', label: '尚未验证', issues: [] };
+}
+
+function displaySource(source) {
+  if (!source) return 'unknown';
+  if (typeof source === 'string') return source;
+  return source.id || source.kind || source.type || 'structured';
+}
+
+function displayPolicyClass(value) {
+  const normalized = String(value || 'soft').toLowerCase();
+  if (normalized === 'hard') return 'Hard';
+  if (normalized === 'optional') return 'Optional';
+  return normalized === 'soft' ? 'Soft' : value;
+}
+
+function displayScore(value) {
+  if (!Number.isFinite(Number(value))) return '未评分';
+  const score = Number(value);
+  return score >= 0 && score <= 1 ? `${Math.round(score * 100)}%` : score.toFixed(2);
+}
+
+function displayValidationIssue(issue) {
+  if (typeof issue === 'string') return issue;
+  const prefix = [issue?.code, issue?.node].filter(Boolean).join(' · ');
+  const detail = issue?.message || issue?.reason || JSON.stringify(issue);
+  return prefix ? `${prefix}：${detail}` : detail;
 }
 
 function autoLayout(graph) {
@@ -315,52 +474,75 @@ function usePanelFocus(updateKey) {
   return panelRef;
 }
 
-function ContextPreviewPanel({ data, onClose, onExclude, onRestore }) {
+function ContextPreviewPanel({ data, onClose, onForceExclude, onForceInclude }) {
   const panelRef = usePanelFocus(data);
-  const entry = data.entry || data.target || '当前入口';
-  const included = Array.isArray(data.included) ? data.included : [];
-  const excluded = Array.isArray(data.excluded) ? data.excluded : [];
+  const { manifest, included, excluded, audit: rawAudit, validation: rawValidation } = contextManifest(data);
+  const entryValue = data.entry || data.target || manifest.entry || manifest.task || '当前入口';
+  const entry = typeof entryValue === 'string' ? entryValue : entryValue.id || entryValue.title || '当前入口';
   const sessionExcluded = new Set(data.sessionSettings?.exclude || []);
-  const usedTokens = Math.max(0, Number(data.estimatedTokens) || 0);
-  const tokenBudget = Math.max(0, Number(data.tokenBudget) || 0);
+  const sessionIncluded = new Set(data.sessionSettings?.include || []);
+  const audit = manifestAudit(data, included, excluded, rawAudit);
+  const usedTokens = audit.selected ?? Math.max(0, Number(data.estimatedTokens) || 0);
+  const tokenBudget = Math.max(0, Number(manifest.budget ?? data.tokenBudget) || 0);
+  const budgetExceeded = Boolean(data.overBudget) || tokenBudget > 0 && usedTokens > tokenBudget;
+  const validation = validationSummary(rawValidation, budgetExceeded);
   const budgetPercent = tokenBudget ? Math.min(100, Math.round(usedTokens / tokenBudget * 100)) : 0;
+  const auditCells = [['Raw', audit.raw], ['Candidate', audit.candidate], ['Selected', audit.selected], ['Excluded', audit.excluded], ['Final', audit.final]];
+  const taskText = data.previewTask || (typeof manifest.task === 'string' ? manifest.task : manifest.task?.content || manifest.task?.title) || '无';
   const renderItem = (item, index, isExcluded) => {
-    const id = item.node || item.module || '未知条目';
+    const id = item.node || item.module || item.id || '未知条目';
     const scopes = Array.isArray(item.scope) ? item.scope : item.scope ? [item.scope] : [];
     const scopeText = scopes.length ? scopes.join(' · ') : '未标注范围';
-    const canExclude = id !== entry && !scopes.includes('task');
-    const sessionExclusion = sessionExcluded.has(id);
-    const canRestore = sessionExclusion;
-    return h('div', { className: 'cg-context-item', key: `${id}-${scopeText}-${index}` },
+    const policyClass = item.policyClass ?? item.policy_class ?? item.contextClass ?? item.context_class ?? item.tier ?? 'soft';
+    const source = item.source ?? item.provenance?.source;
+    const score = item.score ?? item.relevanceScore ?? item.relevance_score;
+    const reason = item.reason || manifest.reasons?.[id] || (isExcluded ? '未选择' : '自动选择');
+    const canForceExclude = !isExcluded && id !== entry && !scopes.includes('task');
+    const canForceInclude = isExcluded && id !== entry;
+    return h('div', { className: 'cg-context-item', 'data-policy': String(policyClass).toLowerCase(), key: `${id}-${scopeText}-${index}` },
       h('div', { className: 'cg-context-item-main' },
         h('span', { className: 'cg-context-item-title', title: id }, id),
-        h('span', { className: 'cg-context-item-meta' }, `${scopeText}${item.tokens === undefined ? '' : ` · ${item.tokens || 0} tokens`}`),
-        h('span', { className: 'cg-context-item-reason' }, `原因 · ${sessionExclusion ? '本会话排除' : item.reason || (isExcluded ? '未选择' : '自动选择')}`)),
-      isExcluded && canRestore
-        ? h(IconButton, { label: `恢复 ${id}`, onClick: () => onRestore(id) }, '↺')
-        : !isExcluded && canExclude
-          ? h(IconButton, { label: `本会话排除 ${id}`, onClick: () => onExclude(id) }, '×')
+        h('span', { className: 'cg-context-item-meta' }, scopeText),
+        h('div', { className: 'cg-context-item-fields' },
+          h('span', null, h('strong', null, 'Class '), displayPolicyClass(policyClass)),
+          h('span', null, h('strong', null, 'Score '), displayScore(score)),
+          h('span', null, h('strong', null, 'Source '), displaySource(source)),
+          h('span', null, h('strong', null, 'Tokens '), Number.isFinite(Number(item.tokens)) ? Number(item.tokens) : 0)),
+        h('span', { className: 'cg-context-item-reason' }, `原因 · ${sessionExcluded.has(id) ? 'Force Exclude' : sessionIncluded.has(id) ? 'Force Include' : reason}`)),
+      canForceExclude
+        ? h(IconButton, { label: `强制排除 ${id}`, onClick: () => onForceExclude(id) }, '×')
+        : canForceInclude
+          ? h(IconButton, { label: `强制包含 ${id}`, onClick: () => onForceInclude(id) }, '+')
           : null);
   };
 
   return h('aside', { ref: panelRef, className: 'cg-side-panel cg-preview-panel', role: 'dialog', 'aria-label': '上下文预览' },
     h('header', { className: 'cg-panel-head' },
       h('div', { className: 'cg-panel-heading' },
-        h('span', { className: 'cg-panel-kicker' }, 'Context Preview'),
-        h('strong', { className: 'cg-panel-title' }, '上下文预览'),
+        h('span', { className: 'cg-panel-kicker' }, 'Context Manifest'),
+        h('strong', { className: 'cg-panel-title' }, '上下文预览与审计'),
         h('span', { className: 'cg-panel-subtitle', title: entry }, `入口 · ${entry}`)),
       h(IconButton, { label: '关闭上下文预览', onClick: onClose }, '×')),
     h('div', { className: 'cg-panel-body' },
-      h('section', { className: 'cg-preview-summary', 'data-over': Boolean(data.overBudget) },
+      h('section', { className: 'cg-preview-summary', 'data-over': budgetExceeded },
         h('div', { className: 'cg-summary-row' },
           h('span', { className: 'cg-summary-label' }, '本轮上下文预算'),
           h('strong', { className: 'cg-summary-value' }, `${usedTokens} / ${tokenBudget} tokens`)),
-        h('div', { className: 'cg-budget-bar', 'data-over': Boolean(data.overBudget), role: 'progressbar', 'aria-label': '上下文预算使用量', 'aria-valuemin': 0, 'aria-valuemax': tokenBudget, 'aria-valuenow': usedTokens },
+        h('div', { className: 'cg-budget-bar', 'data-over': budgetExceeded, role: 'progressbar', 'aria-label': '上下文预算使用量', 'aria-valuemin': 0, 'aria-valuemax': tokenBudget, 'aria-valuenow': usedTokens },
           h('span', { style: { width: `${budgetPercent}%` } })),
-        h('span', { className: 'cg-budget-caption' }, data.overBudget ? '已超过预算，必选内容仍会保留' : `剩余 ${Math.max(0, tokenBudget - usedTokens)} tokens`)),
+        h('span', { className: 'cg-budget-caption' }, budgetExceeded ? '已超过预算，发送前验证应阻止请求' : `剩余 ${Math.max(0, tokenBudget - usedTokens)} tokens`),
+        h('div', { className: 'cg-audit-grid', 'aria-label': 'Request Context Audit' }, auditCells.map(([label, value]) => h('div', { className: 'cg-audit-cell', key: label },
+          h('span', { className: 'cg-audit-label' }, label),
+          h('strong', { className: 'cg-audit-value', title: value === null ? '暂无数据' : `${value} tokens` }, value === null ? '—' : Math.round(value))))),
+        h('div', { className: 'cg-validation', 'data-status': validation.status },
+          h('span', { className: 'cg-validation-mark', 'aria-hidden': true }, validation.status === 'valid' ? '✓' : validation.status === 'invalid' ? '×' : '?'),
+          h('div', { className: 'cg-validation-main' },
+            h('strong', { className: 'cg-validation-title' }, validation.label),
+            validation.issues.map((issue, index) => h('span', { className: 'cg-validation-issue', key: `${displayValidationIssue(issue)}-${index}` }, displayValidationIssue(issue)))))
+      ),
       h('section', { className: 'cg-panel-section' },
         h('div', { className: 'cg-panel-section-head' }, h('h3', { className: 'cg-panel-section-title' }, '当前任务')),
-        h('p', { className: 'cg-panel-task' }, data.previewTask || '无')),
+        h('p', { className: 'cg-panel-task' }, taskText)),
       h('section', { className: 'cg-panel-section' },
         h('div', { className: 'cg-panel-section-head' }, h('h3', { className: 'cg-panel-section-title' }, '已包含'), h('span', { className: 'cg-panel-count' }, included.length)),
         h('div', { className: 'cg-context-list' }, included.length ? included.map((item, index) => renderItem(item, index, false)) : h('span', { className: 'cg-panel-empty' }, '没有已包含内容'))),
@@ -435,6 +617,8 @@ function GraphPanel({ sessionId, projectPath, sendPrompt, setTarget }) {
   const [previewData, setPreviewData] = useState(null);
   const [viewMode, setViewMode] = useState('semantic');
   const [implementationFocus, setImplementationFocus] = useState(null);
+  const [implementationDetail, setImplementationDetail] = useState('0');
+  const [expandedImplementation, setExpandedImplementation] = useState(() => new Set());
   const [functionalProposal, setFunctionalProposal] = useState(null);
   const [nodeMenuOpen, setNodeMenuOpen] = useState(false);
   const svgRef = useRef(null);
@@ -451,7 +635,7 @@ function GraphPanel({ sessionId, projectPath, sendPrompt, setTarget }) {
     try {
       announce('正在载入…');
       const next = await request(`/graph?project=${encodeURIComponent(projectPath)}`);
-      setGraph(next); setSelected(null); setInspected(null); announce(`${next.nodes.length} 个模块`);
+      setGraph(next); setSelected(null); setInspected(null); setImplementationFocus(null); setExpandedImplementation(new Set()); announce(`${next.nodes.length} 个模块`);
       requestAnimationFrame(() => { const svg = svgRef.current; if (svg) setView(fitView(next, svg.clientWidth, svg.clientHeight)); });
     } catch (cause) { announce(cause.message, true); }
   }, [announce, projectPath]);
@@ -472,7 +656,7 @@ function GraphPanel({ sessionId, projectPath, sendPrompt, setTarget }) {
   }, [announce, projectPath]);
   const scan = useCallback(async () => {
     if (!projectPath) return;
-    try { announce('正在扫描代码…'); const result = await request('/scan', { method: 'POST', body: JSON.stringify({ projectPath }) }); setGraph(result.graph); setSelected(null); setInspected(null); const removed = result.removed?.length ? `，已移除 ${result.removed.length} 个已删除实现` : ''; announce(`扫描完成：${result.graph.nodes.length} 个模块，${result.suggestions.length} 条建议${removed}`); }
+    try { announce('正在扫描代码…'); const result = await request('/scan', { method: 'POST', body: JSON.stringify({ projectPath }) }); setGraph(result.graph); setSelected(null); setInspected(null); setImplementationFocus(null); setExpandedImplementation(new Set()); const removed = result.removed?.length ? `，已移除 ${result.removed.length} 个已删除实现` : ''; announce(`扫描完成：${result.graph.nodes.length} 个模块，${result.suggestions.length} 条建议${removed}`); }
     catch (cause) { announce(cause.message, true); }
   }, [announce, projectPath]);
   const fit = useCallback(() => { const svg = svgRef.current; if (svg && graphRef.current) setView(fitView(graphRef.current, svg.clientWidth, svg.clientHeight)); }, []);
@@ -485,9 +669,24 @@ function GraphPanel({ sessionId, projectPath, sendPrompt, setTarget }) {
   }, [announce]);
   const remove = useCallback(() => {
     const current = selectedRef.current; if (!current) return;
-    setGraph(previous => current.kind === 'node'
-      ? { ...previous, nodes: previous.nodes.filter(node => node.id !== current.id), edges: previous.edges.filter(edge => edge.source !== current.id && edge.target !== current.id), mappings: (previous.mappings || []).map(mapping => ({ ...mapping, implementation: (mapping.implementation || []).filter(item => (typeof item === 'string' ? item : item.id) !== current.id) })).filter(mapping => mapping.functional !== current.id && mapping.implementation.length > 0) }
-      : { ...previous, edges: previous.edges.filter((_edge, index) => index !== current.index) });
+    setGraph(previous => {
+      if (current.kind !== 'node') return { ...previous, edges: previous.edges.filter((_edge, index) => index !== current.index) };
+      const removedNode = previous.nodes.find(node => node.id === current.id);
+      const implementation = Boolean(removedNode && isImplementationNode(removedNode));
+      const removedIds = implementation
+        ? new Set([current.id, ...containedImplementationDescendants(previous, current.id)])
+        : new Set([current.id]);
+      const overrides = implementation
+        ? { ...(previous.overrides || {}), include: [...(previous.overrides?.include || [])], exclude: [...(previous.overrides?.exclude || [])], deleted: [...new Set([...(previous.overrides?.deleted || []), ...removedIds])] }
+        : previous.overrides;
+      return {
+        ...previous,
+        overrides,
+        nodes: previous.nodes.filter(node => !removedIds.has(node.id)),
+        edges: previous.edges.filter(edge => !removedIds.has(edge.source) && !removedIds.has(edge.target)),
+        mappings: (previous.mappings || []).map(mapping => ({ ...mapping, implementation: (mapping.implementation || []).filter(item => !removedIds.has(typeof item === 'string' ? item : item.id)) })).filter(mapping => !removedIds.has(mapping.functional) && mapping.implementation.length > 0),
+      };
+    });
     setSelected(null); setInspected(null); announce('已删除，保存后生效');
   }, [announce]);
   const addNode = useCallback(type => {
@@ -521,20 +720,30 @@ function GraphPanel({ sessionId, projectPath, sendPrompt, setTarget }) {
     const requestId = ++overlayRequestRef.current;
     setHelp(false);
     setFunctionalProposal(null);
-    try { const settings = await getSessionSettings(); const previewTask = task.trim() || `预览 ${entry}`; const result = await request('/compile', { method: 'POST', body: JSON.stringify({ projectPath, graph: graphRef.current, entry, task: previewTask, tokenBudget: settings.tokenBudget, maxImplementationFiles: settings.maxImplementationFiles, semanticDepth: settings.semanticDepth, include: settings.include, exclude: settings.exclude }) }); if (overlayRequestRef.current === requestId) setPreviewData({ ...result, sessionSettings: settings, previewTask }); }
+    try {
+      const settings = await getSessionSettings();
+      const previewTask = task.trim() || `预览 ${entry}`;
+      const [result, latestAudit] = await Promise.all([
+        request('/compile', { method: 'POST', body: JSON.stringify({ projectPath, graph: graphRef.current, entry, task: previewTask, tokenBudget: settings.tokenBudget, maxImplementationFiles: settings.maxImplementationFiles, semanticDepth: settings.semanticDepth, include: settings.include, exclude: settings.exclude }) }),
+        request(`/audit?project=${encodeURIComponent(projectPath)}&sessionId=${encodeURIComponent(sessionId)}`).catch(() => null),
+      ]);
+      const audit = latestAudit?.compiledFingerprint && latestAudit.compiledFingerprint === result.compiledFingerprint ? latestAudit : null;
+      if (overlayRequestRef.current === requestId) setPreviewData({ ...result, ...(audit ? { audit } : {}), latestAudit, sessionSettings: settings, previewTask });
+    }
     catch (cause) { if (overlayRequestRef.current === requestId) announce(cause.message, true); }
-  }, [announce, getSessionSettings, projectPath, task]);
-  const excludeFromPreview = useCallback(async id => {
-    const entry = previewData?.entry || previewData?.target || null;
+  }, [announce, getSessionSettings, projectPath, sessionId, task]);
+  const forceExcludeFromPreview = useCallback(async id => {
+    const entry = previewData?.entry || previewData?.target || previewData?.manifest?.entry || previewData?.manifest?.task?.id || null;
     if (!id || id === entry) return;
     const requestId = ++overlayRequestRef.current;
-    try { const settings = previewData?.sessionSettings || await getSessionSettings(); const exclude = [...new Set([...(settings.exclude || []), id])]; await updateSessionSettings({ exclude }); if (overlayRequestRef.current !== requestId) return; announce(`本会话已排除 ${id}`); void showPreview(entry); }
+    try { const settings = previewData?.sessionSettings || await getSessionSettings(); const exclude = [...new Set([...(settings.exclude || []), id])]; const include = (settings.include || []).filter(item => item !== id); await updateSessionSettings({ include, exclude }); if (overlayRequestRef.current !== requestId) return; announce(`本会话已强制排除 ${id}`); void showPreview(entry); }
     catch (cause) { if (overlayRequestRef.current === requestId) announce(cause.message, true); }
   }, [announce, getSessionSettings, previewData, showPreview, updateSessionSettings]);
-  const restorePreviewNode = useCallback(async id => {
-    const entry = previewData?.entry || previewData?.target || null;
+  const forceIncludeFromPreview = useCallback(async id => {
+    const entry = previewData?.entry || previewData?.target || previewData?.manifest?.entry || previewData?.manifest?.task?.id || null;
+    if (!id || id === entry) return;
     const requestId = ++overlayRequestRef.current;
-    try { const settings = previewData?.sessionSettings || await getSessionSettings(); await updateSessionSettings({ exclude: (settings.exclude || []).filter(item => item !== id) }); if (overlayRequestRef.current !== requestId) return; announce(`已恢复 ${id}`); void showPreview(entry); }
+    try { const settings = previewData?.sessionSettings || await getSessionSettings(); const include = [...new Set([...(settings.include || []), id])]; const exclude = (settings.exclude || []).filter(item => item !== id); await updateSessionSettings({ include, exclude }); if (overlayRequestRef.current !== requestId) return; announce(`本会话已强制包含 ${id}`); void showPreview(entry); }
     catch (cause) { if (overlayRequestRef.current === requestId) announce(cause.message, true); }
   }, [announce, getSessionSettings, previewData, showPreview, updateSessionSettings]);
   const inferFunctional = useCallback(async apply => {
@@ -569,17 +778,31 @@ function GraphPanel({ sessionId, projectPath, sendPrompt, setTarget }) {
     return () => window.removeEventListener('keydown', keydown);
   }, [dismissOverlays, fit, layout, remove, save, submit]);
 
+  const implementationHierarchy = useMemo(() => buildImplementationHierarchy(graph), [graph]);
+  const implementationScope = useMemo(() => {
+    const mapped = new Set((graph?.mappings || []).filter(mapping => !implementationFocus || mapping.functional === implementationFocus).flatMap(mapping => (mapping.implementation || []).map(item => typeof item === 'string' ? item : item.id)));
+    if (!implementationFocus) return mapped;
+    const result = new Set([implementationFocus]);
+    for (const id of mapped) {
+      result.add(id);
+      for (const ancestor of implementationHierarchy.ancestorsOf(id)) result.add(ancestor);
+      for (const descendant of implementationHierarchy.descendantsOf(id)) result.add(descendant);
+    }
+    return result;
+  }, [graph, implementationFocus, implementationHierarchy]);
   const visibleNodes = useMemo(() => {
-    const mapped = new Set((graph?.mappings || []).filter(mapping => !implementationFocus || mapping.functional === implementationFocus).flatMap(mapping => mapping.implementation.map(item => item.id)));
-    const preview = new Set((previewData?.included || []).map(item => item.node || item.module));
+    const previewManifest = contextManifest(previewData || {});
+    const preview = new Set(previewManifest.included.map(item => item.node || item.module || item.id));
     return (graph?.nodes || []).filter(node => {
-      const type = node.type || 'code_module'; const implementation = type === 'code_module' || type.startsWith('implementation_');
-      const visible = viewMode === 'semantic' ? !implementation && type !== 'conversation' : viewMode === 'implementation' ? implementationFocus ? mapped.has(node.id) || node.id === implementationFocus : implementation : preview.has(node.id);
+      const type = node.type || 'code_module'; const implementation = isImplementationNode(node);
+      const ancestorsExpanded = implementationHierarchy.ancestorsOf(node.id).every(id => expandedImplementation.has(id));
+      const implementationVisible = node.id === implementationFocus || implementation && (!implementationFocus || implementationScope.has(node.id)) && implementationLevel(node) <= Number(implementationDetail) && ancestorsExpanded;
+      const visible = viewMode === 'semantic' ? !implementation && type !== 'conversation' : viewMode === 'implementation' ? implementationVisible : preview.has(node.id);
       return visible && (typeFilter === 'all' || type === typeFilter) && (!search.trim() || `${node.title || node.label || node.id} ${node.content || ''} ${node.path || ''}`.toLowerCase().includes(search.trim().toLowerCase()));
     });
-  }, [graph, implementationFocus, previewData, search, typeFilter, viewMode]);
+  }, [expandedImplementation, graph, implementationDetail, implementationFocus, implementationHierarchy, implementationScope, previewData, search, typeFilter, viewMode]);
   const displayEdges = useMemo(() => {
-    const visible = new Set(visibleNodes.map(node => node.id)); const mapEdges = viewMode === 'implementation' ? (graph?.mappings || []).filter(mapping => !implementationFocus || mapping.functional === implementationFocus).flatMap(mapping => mapping.implementation.map(item => ({ source: mapping.functional, target: item.id, type: 'implemented_by', scope: [], mode: mapping.mode || 'AUTO' }))) : [];
+    const visible = new Set(visibleNodes.map(node => node.id)); const mapEdges = viewMode === 'implementation' ? (graph?.mappings || []).filter(mapping => !implementationFocus || mapping.functional === implementationFocus).flatMap(mapping => (mapping.implementation || []).map(item => ({ source: mapping.functional, target: typeof item === 'string' ? item : item.id, type: 'implemented_by', scope: [], mode: mapping.mode || 'AUTO', status: mapping.status || (typeof item === 'object' ? item.status : undefined) }))) : [];
     return [...(graph?.edges || []).map((edge, index) => ({ ...edge, _index: index })), ...mapEdges].filter(edge => visible.has(edge.source) && visible.has(edge.target));
   }, [graph, implementationFocus, viewMode, visibleNodes]);
   const nodes = useMemo(() => new Map(visibleNodes.map(node => [node.id, node])), [visibleNodes]);
@@ -593,6 +816,13 @@ function GraphPanel({ sessionId, projectPath, sendPrompt, setTarget }) {
     setSelected(item);
     if (item.kind === 'node') setTarget(item.id);
     setInspected(doublePressed ? item : null);
+  };
+  const toggleImplementationNode = id => {
+    if (!expandedImplementation.has(id)) {
+      const levels = (implementationHierarchy.children.get(id) || []).map(child => implementationLevel(graph?.nodes.find(node => node.id === child)));
+      if (levels.length) setImplementationDetail(current => String(Math.max(Number(current), Math.min(...levels))));
+    }
+    setExpandedImplementation(previous => { const next = new Set(previous); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   };
   const point = event => graphPoint(svgRef.current, view, event.clientX, event.clientY);
   const startPan = event => { if (event.button !== 0) return; event.preventDefault(); pressRef.current = { key: '', time: 0 }; event.currentTarget.setPointerCapture(event.pointerId); setSelected(null); setInspected(null); setGesture({ kind: 'pan', startX: event.clientX, startY: event.clientY, x: view.x, y: view.y }); };
@@ -612,9 +842,10 @@ function GraphPanel({ sessionId, projectPath, sendPrompt, setTarget }) {
   return h('div', { className: 'cg-root' },
     h('header', { className: 'cg-header' },
       h('div', { className: 'cg-title' }, '上下文图谱'),
-      h('select', { className: 'cg-filter', value: viewMode, onChange: event => { setViewMode(event.target.value); setImplementationFocus(null); } }, h('option', { value: 'semantic' }, '语义'), h('option', { value: 'implementation' }, '实现'), h('option', { value: 'context' }, '当前上下文')),
+      h('select', { className: 'cg-filter', value: viewMode, onChange: event => { setViewMode(event.target.value); setImplementationFocus(null); setExpandedImplementation(new Set()); setTypeFilter('all'); } }, h('option', { value: 'semantic' }, '语义'), h('option', { value: 'implementation' }, '实现'), h('option', { value: 'context' }, '当前上下文')),
+      viewMode === 'implementation' ? h('select', { className: 'cg-filter cg-level-filter', value: implementationDetail, title: '实现层级', 'aria-label': '实现层级', onChange: event => setImplementationDetail(event.target.value) }, IMPLEMENTATION_LEVELS.map(([value, label]) => h('option', { key: value, value }, label))) : null,
       h('input', { className: 'cg-search', value: search, placeholder: '搜索节点', onChange: event => setSearch(event.target.value) }),
-      h('select', { className: 'cg-filter', value: typeFilter, onChange: event => setTypeFilter(event.target.value) }, h('option', { value: 'all' }, '全部类型'), NODE_TYPES.map(type => h('option', { key: type, value: type }, type))),
+      h('select', { className: 'cg-filter cg-type-filter', value: typeFilter, onChange: event => setTypeFilter(event.target.value) }, h('option', { value: 'all' }, '全部类型'), NODE_TYPES.map(type => h('option', { key: type, value: type }, type))),
       h('span', { ref: nodeMenuRef, className: 'cg-node-menu-anchor' },
         h(IconButton, { label: '新建节点', onClick: () => setNodeMenuOpen(value => !value) }, '+'),
         nodeMenuOpen ? h('div', { className: 'cg-node-menu', role: 'menu', 'aria-label': '新建节点类型' }, CREATE_NODE_TYPES.map(([type, label]) => h('button', { key: type, className: 'cg-node-menu-item', type: 'button', role: 'menuitem', onClick: () => addNode(type) }, label))) : null),
@@ -628,25 +859,26 @@ function GraphPanel({ sessionId, projectPath, sendPrompt, setTarget }) {
         onWheel: event => { event.preventDefault(); const before = point(event); const zoom = Math.min(2, Math.max(.25, view.zoom * (event.deltaY > 0 ? .9 : 1.1))); const rect = svgRef.current.getBoundingClientRect(); setView({ zoom, x: event.clientX - rect.left - before.x * zoom, y: event.clientY - rect.top - before.y * zoom }); } },
         h('defs', null, h('marker', { id: 'cg-arrow', markerWidth: 8, markerHeight: 8, refX: 7, refY: 4, orient: 'auto' }, h('path', { d: 'M0,0 L8,4 L0,8 Z', fill: 'context-stroke' }))),
         h('g', { transform: `translate(${view.x} ${view.y}) scale(${view.zoom})` },
-          displayEdges.map((edge, index) => { const source = nodes.get(edge.source); const target = nodes.get(edge.target); if (!source || !target) return null; const d = edgePath(source, target); return h('g', { key: `${edge.source}-${edge.target}-${edge.type}-${index}`, onPointerDown: event => { event.preventDefault(); event.stopPropagation(); if (edge._index !== undefined) selectItem({ kind: 'edge', index: edge._index }); } }, h('path', { d, className: 'cg-edge-hit' }), h('path', { d, className: 'cg-edge', 'data-type': edge.type, 'data-selected': selected?.kind === 'edge' && selected.index === edge._index, markerEnd: 'url(#cg-arrow)' })); }),
+          displayEdges.map((edge, index) => { const source = nodes.get(edge.source); const target = nodes.get(edge.target); if (!source || !target) return null; const d = edgePath(source, target); const stale = edge.status === 'stale' || source.status === 'stale' || target.status === 'stale'; return h('g', { key: `${edge.source}-${edge.target}-${edge.type}-${index}`, onPointerDown: event => { event.preventDefault(); event.stopPropagation(); if (edge._index !== undefined) selectItem({ kind: 'edge', index: edge._index }); } }, h('path', { d, className: 'cg-edge-hit' }), h('path', { d, className: 'cg-edge', 'data-type': edge.type, 'data-stale': stale, 'data-selected': selected?.kind === 'edge' && selected.index === edge._index, markerEnd: 'url(#cg-arrow)' })); }),
           gesture?.kind === 'connect' && nodes.get(gesture.source) ? h('path', { className: 'cg-temp', d: edgePath(nodes.get(gesture.source), { x: gesture.point.x, y: gesture.point.y - NODE_H / 2 }) }) : null,
-          visibleNodes.map(node => h('g', { key: node.id, className: 'cg-node', transform: `translate(${node.x || 0} ${node.y || 0})`, 'data-selected': selected?.kind === 'node' && selected.id === node.id, 'data-mode': node.mode || 'AUTO', 'data-node-type': node.type || 'code_module',
+          visibleNodes.map(node => { const childCount = (implementationHierarchy.children.get(node.id) || []).filter(id => !implementationFocus || implementationScope.has(id)).length; const expandable = viewMode === 'implementation' && childCount > 0; return h('g', { key: node.id, className: 'cg-node', transform: `translate(${node.x || 0} ${node.y || 0})`, 'data-selected': selected?.kind === 'node' && selected.id === node.id, 'data-mode': node.mode || 'AUTO', 'data-status': node.status || 'active', 'data-node-type': node.type || 'code_module',
             onPointerDown: event => { event.preventDefault(); event.stopPropagation(); const p = point(event); svgRef.current.setPointerCapture(event.pointerId); selectItem({ kind: 'node', id: node.id }); setGesture({ kind: 'node', id: node.id, dx: p.x - (node.x || 0), dy: p.y - (node.y || 0) }); } },
             h('rect', { className: 'cg-node-box', width: NODE_W, height: NODE_H, rx: 5 }),
             h('path', { className: 'cg-node-head', d: `M5 0 H${NODE_W - 5} Q${NODE_W} 0 ${NODE_W} 5 V28 H0 V5 Q0 0 5 0` }),
-            h('text', { className: 'cg-node-title', x: 11, y: 19 }, truncateNodeText(node.label || node.id, NODE_W - 22, 12)),
+            h('text', { className: 'cg-node-title', x: 11, y: 19 }, truncateNodeText(node.label || node.id, NODE_W - (expandable ? 47 : 22), 12)),
+            expandable ? h('g', { className: 'cg-node-expand', role: 'button', tabIndex: 0, 'aria-label': `${expandedImplementation.has(node.id) ? '折叠' : '展开'} ${node.label || node.id}`, transform: `translate(${NODE_W - 25} 5)`, onPointerDown: event => { event.preventDefault(); event.stopPropagation(); }, onClick: event => { event.preventDefault(); event.stopPropagation(); toggleImplementationNode(node.id); }, onKeyDown: event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggleImplementationNode(node.id); } } }, h('title', null, expandedImplementation.has(node.id) ? '折叠下级实现' : `展开 ${childCount} 个下级实现`), h('rect', { width: 18, height: 18, rx: 3 }), h('text', { x: 9, y: 13, textAnchor: 'middle' }, expandedImplementation.has(node.id) ? '−' : '+')) : null,
             h('text', { className: 'cg-node-meta', x: 11, y: 48 }, truncateNodeText(node.type === 'code_module' || !node.type ? node.path || '未设置路径' : node.type, NODE_W - 22, 10)),
             h('text', { className: 'cg-node-meta', x: 11, y: 69 }, truncateNodeText(node.type === 'code_module' || !node.type ? node.mode || 'AUTO' : `${node.priority || 'normal'} · ${node.status || 'active'}`, NODE_W - 22, 10)),
             h('circle', { className: 'cg-port', cx: 0, cy: NODE_H / 2, r: 6, onPointerDown: event => { event.preventDefault(); event.stopPropagation(); }, onPointerUp: event => { event.preventDefault(); event.stopPropagation(); connect(node.id); } }),
-            h('circle', { className: 'cg-port', cx: NODE_W, cy: NODE_H / 2, r: 6, onPointerDown: event => { event.preventDefault(); event.stopPropagation(); setSelected({ kind: 'node', id: node.id }); setInspected(null); setGesture({ kind: 'connect', source: node.id, point: point(event) }); } }))),
+            h('circle', { className: 'cg-port', cx: NODE_W, cy: NODE_H / 2, r: 6, onPointerDown: event => { event.preventDefault(); event.stopPropagation(); setSelected({ kind: 'node', id: node.id }); setInspected(null); setGesture({ kind: 'connect', source: node.id, point: point(event) }); } })); }),
         )),
       h('div', { className: 'cg-tools' }, h(IconButton, { label: '放大', onClick: () => setView(current => ({ ...current, zoom: Math.min(2, current.zoom * 1.15) })) }, '+'), h(IconButton, { label: '缩小', onClick: () => setView(current => ({ ...current, zoom: Math.max(.25, current.zoom / 1.15) })) }, '−'), h(IconButton, { label: '适合画布 (F)', onClick: fit }, '□'), h(IconButton, { label: '自动排布 (A)', onClick: layout }, '≡')),
       !visibleNodes.length ? h('div', { className: 'cg-empty' }, h('strong', null, graph?.nodes.length ? '没有匹配节点' : '暂无上下文节点'), h('span', null, graph?.nodes.length ? '调整搜索或类型筛选' : '扫描代码或新建上下文节点')) : null,
       h('div', { className: 'cg-status', 'data-error': error }, status),
-      h(Inspector, { graph: graph || { nodes: [], edges: [], mappings: [] }, selected: inspected, updateNode, updateEdge, remove, showImplementation: id => { setImplementationFocus(id); setViewMode('implementation'); } }),
+      h(Inspector, { graph: graph || { nodes: [], edges: [], mappings: [] }, selected: inspected, updateNode, updateEdge, remove, showImplementation: id => { setImplementationFocus(id); setImplementationDetail('0'); setExpandedImplementation(new Set()); setTypeFilter('all'); setViewMode('implementation'); } }),
       help ? h('section', { className: 'cg-help' }, h('h3', null, '快捷键'), h('dl', null,
         h('dt', null, 'Ctrl/⌘ + S'), h('dd', null, '保存图谱'), h('dt', null, 'Ctrl/⌘ + Enter'), h('dd', null, '发送任务'), h('dt', null, 'Delete'), h('dd', null, '删除所选节点或连接'), h('dt', null, 'F'), h('dd', null, '适合画布'), h('dt', null, 'A'), h('dd', null, '自动排布'), h('dt', null, 'Esc'), h('dd', null, '取消连接或选择'), h('dt', null, '拖动端口'), h('dd', null, '手动创建连接'))) : null,
-      previewData ? h(ContextPreviewPanel, { data: previewData, onClose: dismissOverlays, onExclude: id => void excludeFromPreview(id), onRestore: id => void restorePreviewNode(id) }) : null,
+      previewData ? h(ContextPreviewPanel, { data: previewData, onClose: dismissOverlays, onForceExclude: id => void forceExcludeFromPreview(id), onForceInclude: id => void forceIncludeFromPreview(id) }) : null,
       functionalProposal ? h(FunctionalProposalPanel, { proposal: functionalProposal, graph, onClose: dismissOverlays, onConfirm: () => void inferFunctional(true) }) : null),
     );
 }

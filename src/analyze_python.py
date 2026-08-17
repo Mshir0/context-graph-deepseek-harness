@@ -89,7 +89,94 @@ def dotted_name(node):
     return None
 
 
-def analyze(root: Path):
+def symbol_id(module: str, name: str) -> str:
+    return f"{module}:{name}"
+
+
+def symbol_signature(node) -> str:
+    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        prefix = "async def" if isinstance(node, ast.AsyncFunctionDef) else "def"
+        result = f"{prefix} {node.name}({ast.unparse(node.args)})"
+        if node.returns is not None:
+            result += f" -> {ast.unparse(node.returns)}"
+        return result
+    if isinstance(node, ast.ClassDef):
+        bases = [ast.unparse(base) for base in node.bases]
+        bases.extend(ast.unparse(keyword) for keyword in node.keywords)
+        suffix = f"({', '.join(bases)})" if bases else ""
+        return f"class {node.name}{suffix}"
+    return ""
+
+
+def symbol_start_line(node) -> int:
+    decorators = getattr(node, "decorator_list", [])
+    return min([node.lineno, *(item.lineno for item in decorators)])
+
+
+class SymbolVisitor(ast.NodeVisitor):
+    """Collect nested symbol boundaries and calls without changing old module facts."""
+
+    def __init__(self, module):
+        self.module = module
+        self.scope = []
+        self.scope_kinds = []
+        self.symbols = []
+        self.current = []
+
+    def add_symbol(self, node, kind):
+        name = ".".join(self.scope + [node.name])
+        qualified = symbol_id(self.module, name)
+        container = symbol_id(self.module, ".".join(self.scope)) if self.scope else self.module
+        subkind = kind
+        if kind == "function" and self.scope_kinds and self.scope_kinds[-1] == "class":
+            subkind = "method"
+        item = {
+            "id": qualified,
+            "qualified_id": qualified,
+            "name": name,
+            "short_name": node.name,
+            "kind": kind,
+            "subkind": subkind,
+            "container": container,
+            "signature": symbol_signature(node),
+            "line": node.lineno,
+            "start_line": symbol_start_line(node),
+            "end_line": getattr(node, "end_lineno", node.lineno),
+            "calls": [],
+        }
+        self.symbols.append(item)
+        return item
+
+    def visit_ClassDef(self, node):
+        item = self.add_symbol(node, "class")
+        self.scope.append(node.name)
+        self.scope_kinds.append("class")
+        self.current.append(item)
+        self.generic_visit(node)
+        self.current.pop()
+        self.scope_kinds.pop()
+        self.scope.pop()
+
+    def visit_FunctionDef(self, node):
+        item = self.add_symbol(node, "function")
+        self.scope.append(node.name)
+        self.scope_kinds.append("function")
+        self.current.append(item)
+        self.generic_visit(node)
+        self.current.pop()
+        self.scope_kinds.pop()
+        self.scope.pop()
+
+    visit_AsyncFunctionDef = visit_FunctionDef
+
+    def visit_Call(self, node):
+        name = dotted_name(node.func)
+        if name and self.current and name not in self.current[-1]["calls"]:
+            self.current[-1]["calls"].append(name)
+        self.generic_visit(node)
+
+
+def analyze(root: Path, selected_files=None):
     modules = []
     errors = []
     ignored = {".git", ".context", "node_modules", ".venv", "venv", "__pycache__"}
@@ -99,6 +186,12 @@ def analyze(root: Path):
         and not any(part in ignored for part in file_path.parts)
     )
     known_python = {module_name(root, file_path) for file_path in source_files if file_path.suffix == ".py"}
+    requested = {Path(item).as_posix() for item in selected_files or []}
+    if requested:
+        source_files = [
+            file_path for file_path in source_files
+            if file_path.relative_to(root).as_posix() in requested
+        ]
     for file_path in source_files:
         if file_path.suffix.lower() in C_EXTENSIONS:
             try:
@@ -107,12 +200,28 @@ def analyze(root: Path):
                 errors.append({"file": str(file_path.relative_to(root)), "error": str(exc)})
                 continue
             calls = sorted(set(CALL_RE.findall(text)))
-            symbols = [
-                {"name": match.group(1), "kind": "function", "line": text[:match.start()].count("\n") + 1}
-                for match in FUNCTION_RE.finditer(text)
-            ]
+            module = module_name(root, file_path)
+            symbols = []
+            for match in FUNCTION_RE.finditer(text):
+                name = match.group(1)
+                line = text[:match.start()].count("\n") + 1
+                qualified = symbol_id(module, name)
+                symbols.append({
+                    "id": qualified,
+                    "qualified_id": qualified,
+                    "name": name,
+                    "short_name": name,
+                    "kind": "function",
+                    "subkind": "function",
+                    "container": module,
+                    "signature": " ".join(match.group(0).rsplit("{", 1)[0].split()),
+                    "line": line,
+                    "start_line": line,
+                    "end_line": line,
+                    "calls": [],
+                })
             modules.append({
-                "id": module_name(root, file_path),
+                "id": module,
                 "path": str(file_path.relative_to(root)).replace(os.sep, "/"),
                 "language": C_EXTENSIONS[file_path.suffix.lower()],
                 "imports": sorted(set(INCLUDE_RE.findall(text))),
@@ -130,7 +239,6 @@ def analyze(root: Path):
             continue
 
         imports = []
-        symbols = []
         inheritance = []
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
@@ -145,14 +253,13 @@ def analyze(root: Path):
                         continue
                     candidate = f"{base}.{alias.name}" if base else alias.name
                     imports.append(resolve_module(candidate, known_python) or base_target or base or candidate)
-            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                symbols.append({"name": node.name, "kind": "function", "line": node.lineno})
             elif isinstance(node, ast.ClassDef):
-                symbols.append({"name": node.name, "kind": "class", "line": node.lineno})
                 inheritance.extend(filter(None, (dotted_name(base) for base in node.bases)))
 
         usage = UsageVisitor()
         usage.visit(tree)
+        symbol_visitor = SymbolVisitor(module_name(root, file_path))
+        symbol_visitor.visit(tree)
         modules.append({
             "id": module_name(root, file_path),
             "path": str(file_path.relative_to(root)).replace(os.sep, "/"),
@@ -161,13 +268,13 @@ def analyze(root: Path):
             "calls": sorted(usage.calls),
             "references": sorted(usage.references),
             "inheritance": sorted(set(inheritance)),
-            "symbols": sorted(symbols, key=lambda item: (item["line"], item["name"])),
+            "symbols": sorted(symbol_visitor.symbols, key=lambda item: (item["line"], item["name"])),
         })
     return {"version": 1, "root": str(root), "modules": modules, "errors": errors}
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("usage: analyze_python.py PROJECT", file=sys.stderr)
+    if len(sys.argv) < 2:
+        print("usage: analyze_python.py PROJECT [relative-file ...]", file=sys.stderr)
         raise SystemExit(2)
-    print(json.dumps(analyze(Path(sys.argv[1]).resolve()), ensure_ascii=False))
+    print(json.dumps(analyze(Path(sys.argv[1]).resolve(), sys.argv[2:]), ensure_ascii=False))

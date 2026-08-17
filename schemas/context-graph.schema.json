@@ -24,8 +24,15 @@
           "inputs": { "type": "array", "items": { "type": "string" } },
           "outputs": { "type": "array", "items": { "type": "string" } },
           "source": { "type": "string" },
+          "created_by": { "enum": ["user", "ai", "auto", "analyzer", "plugin", "system"] },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+          "derived_from": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
+          "last_verified": { "type": "string" },
+          "subject": { "type": "string" },
+          "slot": { "type": "string" },
+          "value": { "type": "string" },
           "priority": { "enum": ["critical", "high", "normal", "low"] },
-          "status": { "enum": ["active", "resolved", "deprecated", "superseded", "archived"] },
+          "status": { "enum": ["active", "resolved", "deprecated", "superseded", "archived", "stale"] },
           "created_at": { "type": "string" },
           "updated_at": { "type": "string" },
           "metadata": { "type": "object" },
@@ -76,8 +83,22 @@
       "required": ["include", "exclude"],
       "properties": {
         "include": { "type": "array", "items": { "type": "string" } },
-        "exclude": { "type": "array", "items": { "type": "string" } }
+        "exclude": { "type": "array", "items": { "type": "string" } },
+        "deleted": { "type": "array", "uniqueItems": true, "items": { "type": "string" }, "description": "User-deleted implementation node tombstones; scanners must not recreate them." }
       }
+    },
+    "policy": {
+      "type": "object",
+      "description": "Project-level Context Policy overrides. Runtime defaults remain authoritative for omitted fields."
+    },
+    "cache": {
+      "type": "object",
+      "properties": {
+        "revision": { "type": "string" },
+        "invalidated": { "type": "array", "items": { "type": "string" } },
+        "updated_at": { "type": "string" }
+      },
+      "additionalProperties": true
     }
   },
   "$defs": {

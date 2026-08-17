@@ -1,6 +1,6 @@
 {
   "name": "dsh-context-graph",
-  "version": "0.8.3",
+  "version": "0.9.0",
   "description": "Native Context Graph and budget-aware context injection plugin for DeepSeek Harness",
   "type": "module",
   "packageManager": "pnpm@11.7.0",
@@ -11,10 +11,14 @@
     "./package.json": "./package.json"
   },
   "files": [
-    "src/",
+    "src/*.js",
+    "src/*.py",
+    "src/client/",
     "skills/",
     "schemas/",
+    "scripts/",
     "cordis.patch.yml",
+    "CONTEXT_GRAPH_ARCHITECTURE.md",
     "README.md",
     "LICENSE"
   ],
@@ -32,14 +36,14 @@
   },
   "scripts": {
     "test": "node --test",
-    "check": "node --check src/core.js && node --check src/semantic-functional.js && node --check src/session-context.js && node --check src/dsh-plugin.js && node --check src/dsh-routes.js && node --check src/dependency-skill.js && node --check src/context-extraction.js && node --check src/client/index.js"
+    "check": "node --check src/core.js && node --check src/context-policy.js && node --check src/context-firewall.js && node --check src/context-provider.js && node --check src/implementation-index.js && node --check src/project-analysis.js && node --check src/semantic-functional.js && node --check src/session-context.js && node --check src/dsh-context.js && node --check src/dsh-plugin.js && node --check src/dsh-routes.js && node --check src/dependency-skill.js && node --check src/context-extraction.js && node --check src/client/index.js"
   },
   "engines": {
     "node": "^22.19.0 || >=24.0.0"
   },
   "peerDependencies": {
-    "@deepseek-ai/dsh-llm": ">=0.1.0-rc.5 <0.2.0",
-    "@deepseek-ai/dsh-tools": ">=0.1.0-rc.5 <0.2.0",
+    "@deepseek-ai/dsh-llm": ">=0.1.0-rc.6 <0.2.0",
+    "@deepseek-ai/dsh-tools": ">=0.1.0-rc.6 <0.2.0",
     "react": "^18.2.0"
   },
   "devDependencies": {

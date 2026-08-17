@@ -1,0 +1,4 @@
+interface:
+  display_name: "Context Firewall"
+  short_description: "Validate and audit final LLM request context"
+  default_prompt: "Use $context-firewall to validate selected context and audit the final LLM request boundary."

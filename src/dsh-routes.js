@@ -1,8 +1,9 @@
 import { realpath } from 'node:fs/promises';
 import { resolve as resolvePath } from 'node:path';
-import { analyzeProject, compileContext, createTaskNode, ensureMemory, gitSummary, loadGraph, reconcileGraphs, saveGraph } from './core.js';
-import { analyzeDependencies } from './dependency-skill.js';
+import { compileContext, createTaskNode, ensureMemory, gitSummary, loadGraph, reconcileGraphs, saveGraph } from './core.js';
+import { contextRequest } from './context-provider.js';
 import { inferTarget } from './dsh-context.js';
+import { analyzeContextProject, applyContextInvalidation } from './project-analysis.js';
 import { applyFunctionalInference, inferFunctionalModules } from './semantic-functional.js';
 import { resolveSessionContextSettings, updateSessionContextSettings } from './session-context.js';
 
@@ -17,10 +18,10 @@ async function handle(ctx, config, sessionState, req, res) {
   try {
     const url = new URL(req.url || '/', 'http://dsh.local');
     if (url.pathname.startsWith(`${PREFIX}/api/`)) return await api(ctx, config, sessionState, req, res, url);
-    return json(res, 404, { error: 'Context Graph is available in the DeepSeek Harness details panel' });
+    return json(res, 404, { error: 'Context Graph is available in the DeepSeek Harness conversation view' });
   } catch (error) {
     ctx.logger.warn(`context-graph route failed: ${String(error)}`);
-    return json(res, error.code === 'ENOENT' ? 404 : 500, { error: error.message || String(error) });
+    return json(res, error.code === 'ENOENT' ? 404 : error.code === 'CONTEXT_FORCE_EXCLUDED' ? 403 : 500, { error: error.message || String(error) });
   }
 }
 
@@ -52,6 +53,12 @@ async function api(ctx, config, sessionState, req, res, url) {
   }
   if (req.method === 'GET' && url.pathname === `${PREFIX}/api/graph`) return json(res, 200, await loadGraph(projectPath));
   if (req.method === 'GET' && url.pathname === `${PREFIX}/api/git`) return json(res, 200, await gitSummary(projectPath));
+  if (req.method === 'GET' && url.pathname === `${PREFIX}/api/audit`) {
+    const sessionId = String(url.searchParams.get('sessionId') || '');
+    const session = sessionState.get(sessionId);
+    if (!sessionId || !session || resolvePath(session.projectPath || '') !== resolvePath(projectPath)) return json(res, 404, { error: 'DSH session is not active for this workspace' });
+    return json(res, 200, session.lastAudit || { status: 'unavailable', reason: 'No Context Firewall turn has been audited yet.' });
+  }
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' });
   if (url.pathname === `${PREFIX}/api/tasks`) {
     const content = typeof input.content === 'string' ? input.content.trim() : '';
@@ -81,13 +88,18 @@ async function api(ctx, config, sessionState, req, res, url) {
     return json(res, 200, { graph: saved, task, target, sessionSettings });
   }
   if (url.pathname === `${PREFIX}/api/scan`) {
-    const result = reconcileGraphs(await analyzeProject(projectPath), await loadGraph(projectPath));
+    const analysis = await analyzeContextProject(projectPath);
+    const result = reconcileGraphs(analysis.facts, await loadGraph(projectPath));
+    if (analysis.previousCache) result.graph = applyContextInvalidation(result.graph, analysis.invalidation);
+    result.invalidation = analysis.invalidation;
     await ensureMemory(projectPath, result.graph);
     await saveGraph(projectPath, result.graph);
     return json(res, 200, result);
   }
   if (url.pathname === `${PREFIX}/api/functional-infer`) {
-    const graph = await loadGraph(projectPath); const facts = await analyzeDependencies(projectPath); const implementationGraph = reconcileGraphs({ modules: facts.modules.map(module => ({ ...module, imports: [] })) }, graph, { prune: false }).graph; const proposal = inferFunctionalModules(implementationGraph, facts);
+    const graph = await loadGraph(projectPath); const analysis = await analyzeContextProject(projectPath, { persistCache: input.apply === true }); const facts = analysis.dependencyFacts; let implementationGraph = reconcileGraphs(analysis.facts, graph, { prune: false }).graph;
+    if (analysis.previousCache) implementationGraph = applyContextInvalidation(implementationGraph, analysis.invalidation);
+    const proposal = inferFunctionalModules(implementationGraph, facts);
     if (input.apply === true) return json(res, 200, { applied: true, proposal, graph: await saveGraph(projectPath, applyFunctionalInference(implementationGraph, proposal)) });
     return json(res, 200, { applied: false, proposal });
   }
@@ -97,6 +109,16 @@ async function api(ctx, config, sessionState, req, res, url) {
     return json(res, 200, graph);
   }
   if (url.pathname === `${PREFIX}/api/compile`) return json(res, 200, await compileContext({ ...input, tokenBudget: input.tokenBudget ?? config.tokenBudget, projectPath, graph: input.graph || await loadGraph(projectPath) }));
+  if (url.pathname === `${PREFIX}/api/context-request`) {
+    const graph = await loadGraph(projectPath);
+    const analysis = await analyzeContextProject(projectPath, { persistCache: false });
+    const sessionId = typeof input.sessionId === 'string' ? input.sessionId.trim() : '';
+    const session = sessionId ? sessionState.get(sessionId) : null;
+    if (sessionId && (!session || resolvePath(session.projectPath || '') !== resolvePath(projectPath))) return json(res, 404, { error: 'DSH session is not active for this workspace' });
+    const forceExclude = session ? resolveSessionContextSettings(session, config).exclude : [];
+    const response = await contextRequest({ target: input.target, scope: input.scope, reason: input.reason, maxTokens: input.maxTokens ?? input.max_tokens }, { projectPath, graph, facts: analysis.facts, forceExclude });
+    return json(res, 200, response);
+  }
   return json(res, 404, { error: 'Not found' });
 }
 

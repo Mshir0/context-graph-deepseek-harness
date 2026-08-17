@@ -8,6 +8,8 @@ test('declares a native DSH web client entry', async () => {
   assert.equal(manifest.exports['./client'], './src/client/index.js');
   assert.equal(manifest.dsh.client.platform, 'web');
   assert.ok(manifest.dsh.client.inject.includes('@deepseek-ai/dsh-client-ui-conversation'));
+  assert.ok(manifest.files.includes('scripts/'));
+  assert.ok(manifest.files.includes('CONTEXT_GRAPH_ARCHITECTURE.md'));
 });
 
 test('client registers a DSH lazy module factory with the package id', async () => {
@@ -52,7 +54,8 @@ test('client adds a conversation view tab and sends through scoped conversation'
   assert.match(source, /rowsPerColumn/);
   assert.match(source, /fitView\(next/);
   assert.match(source, /Context Preview/);
-  assert.match(source, /本会话排除/);
+  assert.match(source, /强制排除/);
+  assert.match(source, /强制包含/);
   assert.match(source, /function ContextPreviewPanel/);
   assert.match(source, /className: 'cg-side-panel cg-preview-panel'/);
   assert.match(source, /className: 'cg-budget-bar'/);
@@ -72,4 +75,68 @@ test('client adds a conversation view tab and sends through scoped conversation'
   assert.match(source, /查看实现/);
   assert.match(source, /className: 'cg-search'/);
   assert.doesNotMatch(source, /\/context-graph\/index\.html/);
+});
+
+test('context preview renders a formal manifest, request audit, and validation state', async () => {
+  const source = await readFile(new URL('../src/client/index.js', import.meta.url), 'utf8');
+  assert.match(source, /function contextManifest/);
+  assert.match(source, /manifest\.included/);
+  assert.match(source, /policyClass/);
+  assert.match(source, /displayScore/);
+  assert.match(source, /displaySource/);
+  assert.match(source, /rawTokens/);
+  assert.match(source, /candidateTokens/);
+  assert.match(source, /selectedTokens/);
+  assert.match(source, /excludedTokens/);
+  assert.match(source, /finalTokens/);
+  assert.match(source, /Request Context Audit/);
+  assert.match(source, /request\(`\/audit\?project=/);
+  assert.match(source, /latestAudit\.compiledFingerprint === result\.compiledFingerprint/);
+  assert.match(source, /finalEstimatedTotalTokens/);
+  assert.match(source, /validationSummary/);
+  assert.match(source, /validation\.issues/);
+  assert.match(source, /forceExcludeFromPreview/);
+  assert.match(source, /forceIncludeFromPreview/);
+  assert.match(source, /updateSessionSettings\(\{ include, exclude \}\)/);
+});
+
+test('implementation view filters and progressively expands file, class, function, and symbol nodes', async () => {
+  const source = await readFile(new URL('../src/client/index.js', import.meta.url), 'utf8');
+  assert.match(source, /const IMPLEMENTATION_LEVELS/);
+  assert.match(source, /function buildImplementationHierarchy/);
+  assert.match(source, /edge\.type === 'contains'/);
+  assert.match(source, /implementation_file/);
+  assert.match(source, /implementation_class/);
+  assert.match(source, /implementation_function/);
+  assert.match(source, /implementation_symbol/);
+  assert.match(source, /expandedImplementation/);
+  assert.match(source, /toggleImplementationNode/);
+  assert.match(source, /className: 'cg-node-expand'/);
+  assert.match(source, /aria-label': '实现层级'/);
+  assert.match(source, /const STATUSES = \[[^\n]*'stale'/);
+  assert.match(source, /\.cg-node\[data-status=stale\]/);
+  assert.match(source, /'data-stale': stale/);
+});
+
+test('deleting scanned implementation nodes tombstones their hierarchy without dropping overrides', async () => {
+  const source = await readFile(new URL('../src/client/index.js', import.meta.url), 'utf8');
+  assert.match(source, /previous\.overrides\?\.deleted/);
+  assert.match(source, /deleted: \[\.\.\.new Set/);
+  assert.match(source, /include: \[\.\.\.\(previous\.overrides\?\.include/);
+  assert.match(source, /exclude: \[\.\.\.\(previous\.overrides\?\.exclude/);
+  assert.match(source, /isImplementationNode\(removedNode\)/);
+  assert.match(source, /function containedImplementationDescendants/);
+  assert.match(source, /edge\.type !== 'contains'/);
+  assert.match(source, /containedImplementationDescendants\(previous, current\.id\)/);
+  assert.match(source, /nodes: previous\.nodes\.filter\(node => !removedIds\.has\(node\.id\)\)/);
+  assert.match(source, /edges: previous\.edges\.filter\(edge => !removedIds\.has\(edge\.source\) && !removedIds\.has\(edge\.target\)\)/);
+});
+
+test('ships a concise context firewall skill with final audit guidance', async () => {
+  const skill = await readFile(new URL('../skills/context-firewall/SKILL.md', import.meta.url), 'utf8');
+  assert.match(skill, /^---\s+name: context-firewall\s+description:/);
+  assert.match(skill, /context_compile/);
+  assert.match(skill, /context_audit/);
+  assert.match(skill, /surface-replace/);
+  assert.match(skill, /Do not claim that history was removed/);
 });
