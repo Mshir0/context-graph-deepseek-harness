@@ -28,21 +28,21 @@ DSH model adapter (DeepSeek / other configured provider)
 - Node.js `^22.19.0` 或 `>=24`
 - Python 3（Python AST 与 C/C++ 依赖事实提取；没有 Python 时会使用轻量回退扫描）
 
-如果已经克隆 DeepSeek Harness，请在 Harness 工程目录中安装插件。不要在本插件目录直接运行 `pnpm dsh`，因为本仓库不会额外捆绑完整 Harness CLI：
+如果已经克隆 DeepSeek Harness，请在 Harness 工程目录中使用 `npx` 安装插件。不要在本插件目录直接运行 Harness CLI：
 
 ```bash
 cd ~/deepseek-harness
-pnpm dsh plugin --profile web add -w github:Mshir0/context-graph-deepseek-harness
-pnpm dsh --profile web --dump-config
-pnpm dsh web
+npx -y @deepseek-ai/dsh@0.1.0-rc.6 plugin --profile web add -w github:Mshir0/context-graph-deepseek-harness
+npx -y @deepseek-ai/dsh@0.1.0-rc.6 --profile web --dump-config
+npx -y @deepseek-ai/dsh@0.1.0-rc.6 web
 ```
 
-如果没有本地 Harness checkout，也可以用固定版本的临时 CLI 安装和启动：
+如果没有本地 Harness checkout，也可以直接使用同一组 npx 命令安装和启动：
 
 ```bash
-pnpm dlx @deepseek-ai/dsh@0.1.0-rc.6 plugin --profile web add -w github:Mshir0/context-graph-deepseek-harness
-pnpm dlx @deepseek-ai/dsh@0.1.0-rc.6 --profile web --dump-config
-pnpm dlx @deepseek-ai/dsh@0.1.0-rc.6 web
+npx -y @deepseek-ai/dsh@0.1.0-rc.6 plugin --profile web add -w github:Mshir0/context-graph-deepseek-harness
+npx -y @deepseek-ai/dsh@0.1.0-rc.6 --profile web --dump-config
+npx -y @deepseek-ai/dsh@0.1.0-rc.6 web
 ```
 
 从 GitHub 克隆本仓库后，也可以用随插件发布的安装脚本自动选择全局 DSH、指定的 Harness checkout 或固定版本临时 CLI：
@@ -53,7 +53,7 @@ cd context-graph-deepseek-harness
 DSH_HARNESS_DIR=~/deepseek-harness ./scripts/install-linux.sh
 ```
 
-`--dump-config` 中应出现 `context-graph`。如果你安装的是全局 CLI，请把 `pnpm dsh` 整体替换为 `dsh`；`pnpm dlx ...` 是另一种完整调用方式，不能只去掉其中的 `pnpm`。`web` 是 DSH 的独立应用命令，它固定使用 `web` profile，因此不能写成 `pnpm dsh --profile web web`。插件没有 `prepare` 构建脚本，从 GitHub 安装不需要放开 pnpm 的安装期代码执行。
+`--dump-config` 中应出现 `context-graph`。要求 Node.js `^22.19.0` 或 `>=24`；npx 会自动下载固定版本的 DSH CLI，不需要预先安装 pnpm。`web` 是 DSH 的独立应用命令，它固定使用 `web` profile。插件没有 `prepare` 构建脚本，从 GitHub 安装不需要放开安装期代码执行。
 
 ## 卸载插件
 
@@ -62,7 +62,7 @@ DSH_HARNESS_DIR=~/deepseek-harness ./scripts/install-linux.sh
 ```bash
 # 先尝试通过 DSH CLI 卸载
 cd ~/deepseek-harness
-pnpm dsh plugin --profile web remove dsh-context-graph
+npx -y @deepseek-ai/dsh@0.1.0-rc.6 plugin --profile web remove dsh-context-graph
 ```
 
 如果 CLI 报 `ERR_PNPM_CANNOT_REMOVE_MISSING_DEPS`，说明依赖不在当前 profile 的 `package.json` 中，或者插件仍由 patch 层加载。检查三个可能的位置：
@@ -266,7 +266,7 @@ Host 端仅挂载同源 `/context-graph/api/*` 数据接口，并校验请求路
 只根据当前工作区 Context Graph，说明“Request ID 持久化”的需求、公共接口约束、已确认决策和相关实现模块。打开 Context Preview 并报告本轮包含与排除的节点；不要修改代码或图谱。
 ```
 
-验收结果应同时满足：回答能使用对话 A 保存的结构化知识；Preview 不含 `RAW-A-7F3C` 或对话 A 的旧消息；对话 A 的 2000 Token 预算和临时排除项没有继承；关闭并重新启动 `pnpm dsh web` 后，再创建对话 C，项目知识仍存在。需要把工程记忆同步到另一台机器时，应随项目提交 `.context/graph.json`、`.context/project.md` 和人工维护的 `.context/modules/`；分析缓存可以重新生成。
+验收结果应同时满足：回答能使用对话 A 保存的结构化知识；Preview 不含 `RAW-A-7F3C` 或对话 A 的旧消息；对话 A 的 2000 Token 预算和临时排除项没有继承；关闭并重新启动 `npx -y @deepseek-ai/dsh@0.1.0-rc.6 web` 后，再创建对话 C，项目知识仍存在。需要把工程记忆同步到另一台机器时，应随项目提交 `.context/graph.json`、`.context/project.md` 和人工维护的 `.context/modules/`；分析缓存可以重新生成。
 
 ## 验证
 

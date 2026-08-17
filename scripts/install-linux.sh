@@ -21,14 +21,14 @@ chmod +x "$plugin_dir/src/analyze_python.py" "$plugin_dir/scripts/install-linux.
 if command -v dsh >/dev/null 2>&1; then
   dsh plugin --profile "$profile" add -w "$plugin_dir"
   verify_command="dsh --profile $profile --dump-config"
-elif [ -n "${DSH_HARNESS_DIR:-}" ] && [ -f "$DSH_HARNESS_DIR/pnpm-workspace.yaml" ] && command -v pnpm >/dev/null 2>&1; then
-  (cd "$DSH_HARNESS_DIR" && pnpm dsh plugin --profile "$profile" add -w "$plugin_dir")
-  verify_command="cd $DSH_HARNESS_DIR && pnpm dsh --profile $profile --dump-config"
-elif command -v pnpm >/dev/null 2>&1; then
-  pnpm dlx @deepseek-ai/dsh@0.1.0-rc.6 plugin --profile "$profile" add -w "$plugin_dir"
-  verify_command="pnpm dlx @deepseek-ai/dsh@0.1.0-rc.6 --profile $profile --dump-config"
+elif command -v npx >/dev/null 2>&1 && [ -n "${DSH_HARNESS_DIR:-}" ] && [ -f "$DSH_HARNESS_DIR/package.json" ]; then
+  (cd "$DSH_HARNESS_DIR" && npx -y @deepseek-ai/dsh@0.1.0-rc.6 plugin --profile "$profile" add -w "$plugin_dir")
+  verify_command="cd $DSH_HARNESS_DIR && npx -y @deepseek-ai/dsh@0.1.0-rc.6 --profile $profile --dump-config"
+elif command -v npx >/dev/null 2>&1; then
+  npx -y @deepseek-ai/dsh@0.1.0-rc.6 plugin --profile "$profile" add -w "$plugin_dir"
+  verify_command="npx -y @deepseek-ai/dsh@0.1.0-rc.6 --profile $profile --dump-config"
 else
-  echo "DeepSeek Harness CLI is unavailable. Install pnpm, set DSH_HARNESS_DIR, or install dsh globally." >&2
+  echo "DeepSeek Harness CLI is unavailable. Install Node.js with npx, set DSH_HARNESS_DIR, or install dsh globally." >&2
   exit 1
 fi
 
