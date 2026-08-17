@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-export const IMPLEMENTATION_INDEX_VERSION = 1;
+export const IMPLEMENTATION_INDEX_VERSION = 2;
 export const FACTS_CACHE_VERSION = 1;
 const DEFAULT_CACHE_FILE = path.join('.context', 'cache', 'implementation-facts.json');
 

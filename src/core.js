@@ -16,6 +16,9 @@ import {
 
 const execFileAsync = promisify(execFile);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+const C_SOURCE_EXTENSIONS = new Set(['.c', '.cc', '.cpp', '.cxx']);
+const C_HEADER_EXTENSIONS = new Set(['.h', '.hh', '.hpp', '.hxx']);
+const CODE_EXTENSIONS = new Set(['.py', ...C_SOURCE_EXTENSIONS, ...C_HEADER_EXTENSIONS]);
 export const CONTEXT_NODE_TYPES = ['functional', 'code_module', 'implementation_file', 'implementation_class', 'implementation_function', 'implementation_package', 'implementation_symbol', 'requirement', 'task', 'constraint', 'decision', 'interface', 'documentation', 'conversation', 'artifact', 'test', 'issue', 'note', 'project_rule'];
 export const RELATION_TYPES = ['dependency', 'reference', 'interface', 'data', 'optional', 'force_include', 'force_exclude', 'depends_on', 'calls', 'references', 'affects', 'constrains', 'implements', 'implemented_by', 'derived_from', 'conflicts_with', 'supersedes', 'related_to', 'contains', 'uses', 'provides', 'consumes', 'produces', 'feeds', 'transforms', 'triggers', 'tests', 'documents', 'targets', 'requires', 'constrained_by', 'applies_to'];
 export const MODES = ['AUTO', 'MANUAL', 'FORCE_INCLUDE', 'FORCE_EXCLUDE'];
@@ -142,9 +145,46 @@ async function analyzePythonFallback(projectPath, lastError, files = []) {
   const modules = [];
   const requested = new Set(files.map(file => String(file).replaceAll('\\', '/')));
   const fallbackModuleId = relative => {
-    const id = relative.replace(/\.(?:py|c|cc|cpp|cxx)$/i, '').replace(/(?:^|\/)__init__$/, '').replaceAll('/', '.');
+    const header = /\.(?:h|hh|hpp|hxx)$/i.test(relative);
+    const id = (header ? relative : relative.replace(/\.(?:py|c|cc|cpp|cxx)$/i, ''))
+      .replace(/(?:^|\/)__init__$/, '').replaceAll('/', '.');
     return id || path.basename(root);
   };
+  const allFiles = [];
+  async function collect(dir) {
+    let entries;
+    try { entries = await readdir(dir, { withFileTypes: true }); } catch { return; }
+    for (const entry of entries) {
+      if (['.git', '.context', 'node_modules', '.venv', 'venv', '__pycache__'].includes(entry.name)) continue;
+      const file = path.join(dir, entry.name);
+      if (entry.isDirectory()) await collect(file);
+      else if (entry.isFile() && CODE_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) allFiles.push(file);
+    }
+  }
+  await collect(root);
+  allFiles.sort((left, right) => left.localeCompare(right));
+  const allRelatives = allFiles.map(file => path.relative(root, file).replaceAll(path.sep, '/'));
+  const pythonIds = new Set(allRelatives.filter(file => file.toLowerCase().endsWith('.py')).map(fallbackModuleId));
+  const cByBase = new Map();
+  for (const relative of allRelatives.filter(file => /\.(?:c|cc|cpp|cxx|h|hh|hpp|hxx)$/i.test(file))) {
+    const base = relative.replace(/\.(?:c|cc|cpp|cxx|h|hh|hpp|hxx)$/i, '').replaceAll('/', '.');
+    const values = cByBase.get(base) || [];
+    values.push(relative);
+    cByBase.set(base, values);
+  }
+  const moduleIds = new Map();
+  const usedIds = new Set(pythonIds);
+  for (const relative of allRelatives) {
+    if (!/\.(?:c|cc|cpp|cxx|h|hh|hpp|hxx)$/i.test(relative)) continue;
+    const extension = path.extname(relative).toLowerCase();
+    const base = relative.replace(/\.(?:c|cc|cpp|cxx|h|hh|hpp|hxx)$/i, '').replaceAll('/', '.');
+    const sourceCount = (cByBase.get(base) || []).filter(file => /\.(?:c|cc|cpp|cxx)$/i.test(file)).length;
+    let id = /\.(?:h|hh|hpp|hxx)$/i.test(relative) || sourceCount > 1 || usedIds.has(base) ? `${base}${extension}` : base;
+    let suffix = 2;
+    while (usedIds.has(id)) id = `${base}${extension}.${suffix++}`;
+    moduleIds.set(relative, id);
+    usedIds.add(id);
+  }
   const relativePythonImports = (source, relative, id) => {
     const imports = [...source.matchAll(/^\s*import\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)/gm)].map(match => match[1]);
     const packageId = relative.endsWith('/__init__.py') || relative === '__init__.py'
@@ -173,17 +213,17 @@ async function analyzePythonFallback(projectPath, lastError, files = []) {
       if (['.git', '.context', 'node_modules', '.venv', 'venv', '__pycache__'].includes(entry.name)) continue;
       const file = path.join(dir, entry.name);
       if (entry.isDirectory()) await walk(file);
-      else if (entry.isFile() && ['.py', '.c', '.cc', '.cpp', '.cxx'].includes(path.extname(entry.name).toLowerCase())) {
+      else if (entry.isFile() && CODE_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) {
         const rel = path.relative(root, file).replaceAll(path.sep, '/');
         if (requested.size && !requested.has(rel)) continue;
         const extension = path.extname(rel).toLowerCase();
-        const id = fallbackModuleId(rel);
+        const id = moduleIds.get(rel) || fallbackModuleId(rel);
         const source = await optionalRead(file);
         const isPython = extension === '.py';
         modules.push({
           id: id || path.basename(root),
           path: rel,
-          language: isPython ? 'python' : extension === '.c' ? 'c' : 'cpp',
+          language: isPython ? 'python' : extension === '.c' || extension === '.h' ? 'c' : 'cpp',
           imports: isPython
             ? relativePythonImports(source, rel, id)
             : [...source.matchAll(/^\s*#\s*include\s*[<"]([^">]+)[">]/gm)].map((match) => match[1]),
@@ -202,7 +242,10 @@ async function analyzePythonFallback(projectPath, lastError, files = []) {
 }
 
 function importTarget(importName, moduleIds) {
-  const normalized = importName.replace(/^\.+/, '').replaceAll('/', '.').replace(/\.(?:h|hh|hpp|hxx|c|cc|cpp|cxx)$/i, '');
+  const raw = importName.replace(/^\.+/, '').replaceAll('/', '.');
+  const directRaw = [...moduleIds].filter(id => raw === id || raw.startsWith(`${id}.`)).sort((a, b) => b.length - a.length);
+  if (directRaw.length) return directRaw[0];
+  const normalized = raw.replace(/\.(?:h|hh|hpp|hxx|c|cc|cpp|cxx)$/i, '');
   const direct = [...moduleIds].filter(id => normalized === id || normalized.startsWith(`${id}.`)).sort((a, b) => b.length - a.length);
   if (direct.length) return direct[0];
   const parts = normalized.split('.');

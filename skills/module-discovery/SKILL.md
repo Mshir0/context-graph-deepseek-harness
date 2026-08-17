@@ -5,4 +5,4 @@ description: Discover project code modules and symbols for Context Graph. Use be
 
 # Module Discovery
 
-Call `dependency_discover_modules` for Python facts or `context_graph_scan` for the plugin's supported project scan. Use changed project-relative files for incremental dependency analysis. Treat discovered code as `code_module` nodes and review scan proposals before saving relationships.
+Call `dependency_discover_modules` for Python, C, or C++ facts or `context_graph_scan` for the plugin's supported project scan. Use changed project-relative source or header files for incremental dependency analysis. Treat discovered code as `code_module` nodes and review scan proposals before saving relationships.

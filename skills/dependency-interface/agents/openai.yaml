@@ -1,4 +1,4 @@
 interface:
   display_name: "Dependency Interface"
-  short_description: "Analyze Python dependency facts and interfaces"
+  short_description: "Analyze Python, C, and C++ dependency facts and interfaces"
   default_prompt: "Use $dependency-interface to inspect this project dependency and interface relationships."

@@ -10,17 +10,57 @@ from pathlib import Path
 
 
 C_EXTENSIONS = {".c": "c", ".cc": "cpp", ".cpp": "cpp", ".cxx": "cpp"}
+C_HEADER_EXTENSIONS = {".h": "c", ".hh": "cpp", ".hpp": "cpp", ".hxx": "cpp"}
+C_FAMILY_EXTENSIONS = {**C_EXTENSIONS, **C_HEADER_EXTENSIONS}
 INCLUDE_RE = re.compile(r'^\s*#\s*include\s*[<"]([^">]+)[">]', re.MULTILINE)
-FUNCTION_RE = re.compile(r'^\s*(?:[A-Za-z_]\w*\s+)*[A-Za-z_]\w*\s+([A-Za-z_]\w*)\s*\([^;{}]*\)\s*\{', re.MULTILINE)
-CALL_RE = re.compile(r'\b([A-Za-z_]\w*)\s*\(')
+FUNCTION_RE = re.compile(
+    r'^\s*(?:(?:template\s*<[^>{}]*>\s*)?)(?:(?:[A-Za-z_]\w*|::|[<>*&~,])\s+)*'
+    r'(?P<name>(?:[A-Za-z_]\w*::)*~?[A-Za-z_]\w*)\s*'
+    r'\((?P<params>[^;{}()]*(?:\([^)]*\)[^;{}()]*)*)\)'
+    r'(?P<qualifiers>(?:\s*(?:const|noexcept|override|final)\b|\s*->\s*[^\{;]+|\s*\[\[[^\]]+\]\s*)*)'
+    r'\s*(?P<end>[{;])', re.MULTILINE)
+CLASS_RE = re.compile(r'^\s*(?:template\s*<[^>{}]*>\s*)?(?P<kind>class|struct|enum)\s+(?P<name>[A-Za-z_]\w*)[^;{]*\{', re.MULTILINE)
+CALL_RE = re.compile(r'\b((?:[A-Za-z_]\w*::)*[A-Za-z_]\w*)\s*\(')
+CONTROL_NAMES = {"if", "for", "while", "switch", "catch", "return", "sizeof", "decltype"}
 
 
 def module_name(root: Path, file_path: Path) -> str:
-    rel = file_path.relative_to(root).with_suffix("")
+    relative = file_path.relative_to(root)
+    if relative.suffix.lower() in C_HEADER_EXTENSIONS:
+        return ".".join(relative.parts)
+    rel = relative.with_suffix("")
     parts = list(rel.parts)
     if parts and parts[-1] == "__init__":
         parts.pop()
     return ".".join(parts) or root.name
+
+
+def c_base_module_name(root: Path, file_path: Path) -> str:
+    rel = file_path.relative_to(root).with_suffix("")
+    return ".".join(rel.parts) or root.name
+
+
+def c_module_names(root: Path, files, python_ids):
+    c_files = [file_path for file_path in files if file_path.suffix.lower() in C_FAMILY_EXTENSIONS]
+    by_base = {}
+    for file_path in c_files:
+        by_base.setdefault(c_base_module_name(root, file_path), []).append(file_path)
+    used = set(python_ids)
+    result = {}
+    for file_path in c_files:
+        extension = file_path.suffix.lower()
+        base = c_base_module_name(root, file_path)
+        source_count = sum(item.suffix.lower() in C_EXTENSIONS for item in by_base[base])
+        candidate = f"{base}{extension}" if extension in C_HEADER_EXTENSIONS or source_count > 1 or base in used else base
+        if candidate in used or candidate in result.values():
+            candidate = f"{base}{extension}"
+            suffix = 2
+            while candidate in used or candidate in result.values():
+                candidate = f"{base}{extension}.{suffix}"
+                suffix += 1
+        result[file_path] = candidate
+        used.add(candidate)
+    return result
 
 
 def package_name(root: Path, file_path: Path) -> str:
@@ -182,10 +222,11 @@ def analyze(root: Path, selected_files=None):
     ignored = {".git", ".context", "node_modules", ".venv", "venv", "__pycache__"}
     source_files = sorted(
         file_path for file_path in root.rglob("*")
-        if file_path.is_file() and (file_path.suffix == ".py" or file_path.suffix.lower() in C_EXTENSIONS)
+        if file_path.is_file() and (file_path.suffix == ".py" or file_path.suffix.lower() in C_FAMILY_EXTENSIONS)
         and not any(part in ignored for part in file_path.parts)
     )
     known_python = {module_name(root, file_path) for file_path in source_files if file_path.suffix == ".py"}
+    c_ids = c_module_names(root, source_files, known_python)
     requested = {Path(item).as_posix() for item in selected_files or []}
     if requested:
         source_files = [
@@ -193,17 +234,17 @@ def analyze(root: Path, selected_files=None):
             if file_path.relative_to(root).as_posix() in requested
         ]
     for file_path in source_files:
-        if file_path.suffix.lower() in C_EXTENSIONS:
+        if file_path.suffix.lower() in C_FAMILY_EXTENSIONS:
             try:
                 text = file_path.read_text(encoding="utf-8")
             except (OSError, UnicodeError) as exc:
                 errors.append({"file": str(file_path.relative_to(root)), "error": str(exc)})
                 continue
-            calls = sorted(set(CALL_RE.findall(text)))
-            module = module_name(root, file_path)
+            calls = sorted({name for name in CALL_RE.findall(text) if name not in CONTROL_NAMES})
+            module = c_ids[file_path]
             symbols = []
-            for match in FUNCTION_RE.finditer(text):
-                name = match.group(1)
+            for match in CLASS_RE.finditer(text):
+                name = match.group('name')
                 line = text[:match.start()].count("\n") + 1
                 qualified = symbol_id(module, name)
                 symbols.append({
@@ -211,10 +252,31 @@ def analyze(root: Path, selected_files=None):
                     "qualified_id": qualified,
                     "name": name,
                     "short_name": name,
-                    "kind": "function",
-                    "subkind": "function",
+                    "kind": "class" if match.group('kind') != 'enum' else "symbol",
+                    "subkind": match.group('kind'),
                     "container": module,
-                    "signature": " ".join(match.group(0).rsplit("{", 1)[0].split()),
+                    "signature": f"{match.group('kind')} {name}",
+                    "line": line,
+                    "start_line": line,
+                    "end_line": line,
+                    "calls": [],
+                })
+            for match in FUNCTION_RE.finditer(text):
+                name = match.group('name').replace('::', '.')
+                if name.split('.')[-1] in CONTROL_NAMES:
+                    continue
+                line = text[:match.start()].count("\n") + 1
+                qualified = symbol_id(module, name)
+                container_name = name.rpartition('.')[0]
+                symbols.append({
+                    "id": qualified,
+                    "qualified_id": qualified,
+                    "name": name,
+                    "short_name": name,
+                    "kind": "function",
+                    "subkind": "method" if container_name else "function",
+                    "container": symbol_id(module, container_name) if container_name else module,
+                    "signature": " ".join(match.group(0).rstrip('{;').split()),
                     "line": line,
                     "start_line": line,
                     "end_line": line,
@@ -223,7 +285,7 @@ def analyze(root: Path, selected_files=None):
             modules.append({
                 "id": module,
                 "path": str(file_path.relative_to(root)).replace(os.sep, "/"),
-                "language": C_EXTENSIONS[file_path.suffix.lower()],
+                "language": C_FAMILY_EXTENSIONS[file_path.suffix.lower()],
                 "imports": sorted(set(INCLUDE_RE.findall(text))),
                 "calls": calls,
                 "references": [],

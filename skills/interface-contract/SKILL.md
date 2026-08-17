@@ -1,6 +1,6 @@
 ---
 name: interface-contract
-description: Extract Python function and class interface contracts for minimal cross-module context. Use before changing an API or when Context Compiler should include an interface instead of an entire dependency source file.
+description: Extract Python, C, and C++ function and class interface contracts for minimal cross-module context. Use before changing an API or when Context Compiler should include an interface instead of an entire dependency source file.
 ---
 
 # Interface Contract

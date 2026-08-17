@@ -1,6 +1,6 @@
 {
   "name": "dsh-context-graph",
-  "version": "0.9.1",
+  "version": "0.10.0",
   "description": "Native Context Graph and budget-aware context injection plugin for DeepSeek Harness",
   "type": "module",
   "packageManager": "pnpm@11.7.0",

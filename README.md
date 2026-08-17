@@ -26,7 +26,7 @@ DSH model adapter (DeepSeek / other configured provider)
 
 - DeepSeek Harness `0.1.0-rc.6` 或更新的 `0.1.x` 版本
 - Node.js `^22.19.0` 或 `>=24`
-- Python 3（完整 Python AST 分析；没有 Python 时会使用轻量回退分析）
+- Python 3（Python AST 与 C/C++ 依赖事实提取；没有 Python 时会使用轻量回退扫描）
 
 如果已经克隆 DeepSeek Harness，请在 Harness 工程目录中安装插件。不要在本插件目录直接运行 `pnpm dsh`，因为本仓库不会额外捆绑完整 Harness CLI：
 
@@ -74,7 +74,7 @@ DSH_HARNESS_DIR=~/deepseek-harness ./scripts/install-linux.sh
 - `functional_infer`：从当前有效的实现模块生成待确认的功能节点、功能关系和多对多实现映射；仅在 `apply=true` 时保存。再次确认会恢复证据仍成立的 AUTO 节点并替换其稳定映射，已删除实现和 MANUAL 所有权不会被自动覆盖。
 - `functional_map_implementation`：手动保存功能节点到实现节点的映射，不修改源码。
 - `functional_merge` / `functional_split`：调整功能节点粒度，不修改源码或文件路径。
-- `dependency_discover_modules`：只读发现 Python 模块、符号和可选变更文件的增量事实。
+- `dependency_discover_modules`：只读发现 Python、C、C++ 模块、符号和可选变更文件的增量事实。
 - `dependency_analyze_module` / `dependency_analyze_dependencies`：读取模块关系、接口与证据。
 - `dependency_find_callers` / `dependency_find_callees` / `dependency_find_related_modules`：查询调用与直接模块关系。
 - `dependency_extract_interface`：读取函数和类的输入、输出与定义证据。
@@ -125,9 +125,9 @@ Context Compiler 从任务或功能节点开始，先遍历需求、约束、决
 
 ## Dependency & Interface Skill
 
-`skills/dependency-interface/SKILL.md` 随插件发布。它将 Python AST 分析作为独立的工程依赖事实发现层：输出模块、符号级关系、接口 Contract、代码证据及置信度；不保存 Context Graph、不修改业务代码，也不决定模型最终上下文。Context Graph 的更新仍必须经 `context_graph_save` 显式确认，`FORCE_INCLUDE` 和 `FORCE_EXCLUDE` 永远优先于自动分析。
+`skills/dependency-interface/SKILL.md` 随插件发布。它将 Python AST 与保守的 C/C++ 事实提取作为独立的工程依赖发现层：输出模块、符号级关系、接口 Contract、代码证据及置信度；不保存 Context Graph、不修改业务代码，也不决定模型最终上下文。Context Graph 的更新仍必须经 `context_graph_save` 显式确认，`FORCE_INCLUDE` 和 `FORCE_EXCLUDE` 永远优先于自动分析。
 
-依赖分析支持工作区外层包目录与 Python import 包根不同的布局（例如 `starlette/starlette/*.py`），也支持包内相对导入。关系目标保留扫描得到的规范模块 ID，并通过唯一包根别名解析源码 import；存在多个候选时不会猜测或写入关系。用户确认的 `MANUAL` 边会被一致性检查保留，不会作为陈旧自动关系建议删除。
+依赖分析支持工作区外层包目录与 Python import 包根不同的布局（例如 `starlette/starlette/*.py`），也支持包内相对导入。C/C++ 扫描支持 `.c`、`.cc`、`.cpp`、`.cxx`、`.h`、`.hh`、`.hpp`、`.hxx`，并提取项目内 `#include`、类/结构体、函数接口、可唯一确认的调用和继承关系。头文件保留扩展名作为模块 ID 的一部分，避免与同名源文件冲突；扫描器不依赖 clang，遇到宏展开、重载或外部符号等歧义时不会猜测关系。用户确认的 `MANUAL` 边会被一致性检查保留，不会作为陈旧自动关系建议删除。
 
 ## Harness 对话视图
 

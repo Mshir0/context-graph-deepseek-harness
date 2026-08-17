@@ -450,19 +450,19 @@ function registerTools(ctx, config, sessionState) {
 function registerDependencyTools(ctx) {
   const factsFor = async (exec, files = []) => analyzeDependencies(workspaceOf(exec), { files });
   const moduleTool = (name, description, execute) => ctx.tools.register(textTool({ name, description, parameters: {
-    module: { type: 'string', required: true, description: 'Python module id from dependency_discover_modules.' },
+    module: { type: 'string', required: true, description: 'Python, C, or C++ module id from dependency_discover_modules.' },
   }, execute }));
 
   ctx.tools.register(textTool({
     name: 'dependency_discover_modules',
-    description: 'Read Python modules and symbols using the Dependency Skill. This does not modify code or Context Graph.',
-    parameters: { files: { type: 'array', items: { type: 'string' }, description: 'Optional changed project-relative Python files for incremental analysis.' } },
+    description: 'Read Python, C, and C++ modules and symbols using the Dependency Skill. This does not modify code or Context Graph.',
+    parameters: { files: { type: 'array', items: { type: 'string' }, description: 'Optional changed project-relative Python, C, or C++ source/header files for incremental analysis.' } },
     async execute(args, exec) { const facts = await factsFor(exec, args.files || []); return JSON.stringify({ modules: discoverModules(facts), errors: facts.errors, analyzed_files: facts.analyzed_files }, null, 2); },
   }));
   moduleTool('dependency_analyze_module', 'Read a module, its code relationships, and its extracted interfaces.', async (args, exec) => JSON.stringify(analyzeModule(await factsFor(exec), args.module), null, 2));
   moduleTool('dependency_analyze_dependencies', 'Read outgoing dependency facts for a module, including evidence and confidence.', async (args, exec) => JSON.stringify(analyzeModuleDependencies(await factsFor(exec), args.module), null, 2));
   moduleTool('dependency_find_related_modules', 'Find direct callers and callees at module level without deciding context selection.', async (args, exec) => JSON.stringify(findRelatedModules(await factsFor(exec), args.module), null, 2));
-  moduleTool('dependency_extract_interface', 'Extract public Python function and class contracts for a module.', async (args, exec) => JSON.stringify(extractInterface(await factsFor(exec), args.module), null, 2));
+  moduleTool('dependency_extract_interface', 'Extract public Python, C, or C++ function and class contracts for a module.', async (args, exec) => JSON.stringify(extractInterface(await factsFor(exec), args.module), null, 2));
   moduleTool('dependency_propose_context_edges', 'Produce non-binding Context Graph edge proposals from internal dependency facts. Does not save anything.', async (args, exec) => JSON.stringify(proposeContextEdges(await factsFor(exec), args.module), null, 2));
 
   ctx.tools.register(textTool({
@@ -482,7 +482,7 @@ function registerDependencyTools(ctx) {
     async execute(_args, exec) { const root = workspaceOf(exec); return JSON.stringify(checkConsistency(await factsFor(exec), await loadGraph(root)), null, 2); },
   }));
   ctx.tools.register(textTool({
-    name: 'dependency_detect_changes', description: 'Compare a previous Dependency Skill JSON result with current facts and return added/removed relationships.', parameters: { previous_facts_json: { type: 'string', required: true, description: 'Earlier complete Dependency Skill JSON result.' }, files: { type: 'array', items: { type: 'string' }, description: 'Optional changed files for incremental current analysis.' } },
+    name: 'dependency_detect_changes', description: 'Compare a previous Dependency Skill JSON result with current facts and return added/removed relationships.', parameters: { previous_facts_json: { type: 'string', required: true, description: 'Earlier complete Dependency Skill JSON result.' }, files: { type: 'array', items: { type: 'string' }, description: 'Optional changed Python, C, or C++ source/header files for incremental current analysis.' } },
     async execute(args, exec) { return JSON.stringify(detectGraphChanges(JSON.parse(args.previous_facts_json), await factsFor(exec, args.files || []), { files: args.files || [] }), null, 2); },
   }));
 }

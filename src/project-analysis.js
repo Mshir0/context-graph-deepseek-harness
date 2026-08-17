@@ -9,7 +9,7 @@ import {
   updateFactsCache,
 } from './implementation-index.js';
 
-const SOURCE_EXTENSIONS = new Set(['.py', '.c', '.cc', '.cpp', '.cxx']);
+const SOURCE_EXTENSIONS = new Set(['.py', '.c', '.cc', '.cpp', '.cxx', '.h', '.hh', '.hpp', '.hxx']);
 const IGNORED_DIRECTORIES = new Set(['.git', '.context', 'node_modules', '.venv', 'venv', '__pycache__']);
 
 async function implementationFiles(projectPath) {
