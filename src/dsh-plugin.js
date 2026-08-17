@@ -46,8 +46,11 @@ export const inject = ['agents', 'sessions', 'tools', 'systemPrompt', 'llm'];
 
 const DEFAULTS = {
   tokenBudget: 6000,
-  requestTokenBudget: 64000,
-  outputReserveTokens: 6000,
+  // DSH currently sends maxTokens=256000 for some providers. Keep the
+  // firewall budget above that request so short ordinary messages are not
+  // rejected before the model adapter receives them.
+  requestTokenBudget: 300000,
+  outputReserveTokens: 256000,
   tokenSafetyRatio: 1.15,
   allowedInstructionPlugins: [],
   autoScan: true,
