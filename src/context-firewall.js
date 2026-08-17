@@ -117,7 +117,10 @@ export function filterNewTurnMessages(messages, { allowedInstructionPlugins = []
     }
     if (message?.role !== 'user') return false;
     const kind = message?.source?.kind;
-    return !kind || kind === 'user' || kind === 'tool';
+    // MessageSource is merge-extensible. Keep user-role messages from new
+    // Harness producers; only explicit plugin messages are dynamic context
+    // and must be denied unless their instruction producer is trusted.
+    return kind !== 'plugin';
   });
 }
 

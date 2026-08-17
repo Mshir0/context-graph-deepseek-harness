@@ -708,6 +708,43 @@ test('Context Firewall rejects a new turn when compiled-context validation fails
   assert.ok(audit.validation.errors.includes('policy denied'));
 });
 
+test('keeps a generic dialog message when no Context Graph target can be inferred', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'context-graph-target-fallback-'));
+  await saveGraph(root, normalizeGraph({ ...emptyGraph(root), nodes: [
+    { id: 'function.audio', type: 'functional', title: 'Audio processing', content: 'Audio capability.' },
+    { id: 'function.video', type: 'functional', title: 'Video processing', content: 'Video capability.' },
+  ] }, root));
+  const harness = createHarnessContext();
+  apply(harness.ctx, { webUi: false, autoScan: false });
+  const agent = { session: createSession('session-target-fallback', root), ctx: { effect() {} } };
+  harness.handlers.get('agent/session-start')({ agent });
+
+  const user = userMessage('继续刚才的讨论');
+  const decision = await harness.handlers.get('agent/pre-step')(
+    { agent, turn: 1, step: 1, signal: new AbortController().signal },
+    async () => ({ kind: 'enter', messages: [user] }),
+  );
+  assert.equal(decision.kind, 'enter');
+  assert.equal(decision.messages.length, 2);
+  assert.equal(decision.messages[0].source?.plugin, 'context-graph');
+  assert.match(decision.messages[0].content[0].text, /target="context\.none"/);
+  assert.equal(decision.messages[1], user);
+  agent.session.enter(decision.messages);
+  const visible = agent.session.deriveMessages();
+  assert.equal(visible.length, 2);
+  assert.equal(visible[1], user);
+  assert.match(visible[0].content[0].text, /target="context\.none"/);
+  assert.equal(harness.handlers.get('llm/stream')(
+    authorizedAgentRequest(agent, { sessionId: 'session-target-fallback', system: 'Static rules', tools: [], messages: visible }),
+    () => 'fallback-streamed',
+  ), 'fallback-streamed');
+  const audit = JSON.parse(await harness.tools.get('context_audit').execute({}, { agent }));
+  assert.equal(audit.status, 'allowed');
+  assert.equal(audit.graphInjection, 'fallback-context-free');
+  assert.equal(audit.finalSnapshotCount, 1);
+  assert.equal(audit.finalMessageCount, 2);
+});
+
 test('autoInject false uses an enforced context-free snapshot instead of leaking history or blocking', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'context-graph-context-free-'));
   const harness = createHarnessContext();

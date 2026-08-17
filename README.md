@@ -91,6 +91,8 @@ DSH_HARNESS_DIR=~/deepseek-harness ./scripts/install-linux.sh
 6. 在官方最终 `llm/stream` 边界校验完整消息列表与快照指纹，并限制 `system + messages + tools + output reserve` 的保守 Token 估值；超出 `requestTokenBudget` 时阻止发送。
 7. 使用 `context_audit` 保留允许或阻止原因、验证结果、完整 Payload 指纹和 Surface 动作；相同任务和上下文仍会复用去重。
 
+普通对话不要求必须能推断出 Context Graph 目标。若本轮目标无法推断或项目扫描暂时失败，插件会在仍可替换 Session Surface 时发送一个不含项目图谱内容的 `context.none` 快照，不会因为 `agent/pre-step` 的 `reject` 丢失用户输入；只有取消请求、无法安全替换已有历史或明确验证冲突时才会阻止发送。
+
 如果目标模块无法可靠推断，插件不会猜测或加载全工程；Agent 可调用 `context_select` 明确目标。
 
 本轮用户输入中的明确上下文排除指令（例如“修改 ASR，不要加载 Speaker”）会被保守解析为仅对本轮生效的 Force Exclude，并从目标候选中移除。只接受带有加载、包含、注入、读取等明确动作的否定语句或直接的“排除/Exclude”命令；同名语义节点无法唯一确定时会阻断并要求用户选择精确节点，不会猜测。

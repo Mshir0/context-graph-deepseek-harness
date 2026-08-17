@@ -73,10 +73,11 @@ test('step filtering keeps trusted input and rejects unapproved plugin instructi
     { role: 'user', source: { kind: 'plugin', plugin: 'rules', form: 'instructions' } },
     { role: 'user', source: { kind: 'plugin', plugin: 'workspace', form: 'snapshot', sections: [] } },
     { role: 'user', source: { kind: 'tool', callId: 'call-1' } },
+    { role: 'user', source: { kind: 'client-input' } },
     { role: 'system', source: { kind: 'agent-instructions', form: 'instructions' } },
   ];
-  assert.deepEqual(filterNewTurnMessages(messages), [messages[0], messages[3], messages[4]]);
-  assert.deepEqual(filterNewTurnMessages(messages, { allowedInstructionPlugins: ['rules'] }), [messages[0], messages[1], messages[3], messages[4]]);
+  assert.deepEqual(filterNewTurnMessages(messages), [messages[0], messages[3], messages[4], messages[5]]);
+  assert.deepEqual(filterNewTurnMessages(messages, { allowedInstructionPlugins: ['rules'] }), [messages[0], messages[1], messages[3], messages[4], messages[5]]);
 });
 
 test('audits the frozen final request and rejects missing or unauthorized snapshots', () => {

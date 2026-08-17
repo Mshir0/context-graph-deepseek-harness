@@ -189,6 +189,62 @@ export function apply(ctx, input = {}) {
       if (placement.action === 'prepend' || placement.action === 'audit-prepend') return { kind: 'enter', messages: [snapshot, ...outputMessages] };
       return { kind: 'enter', messages: outputMessages };
     } catch (error) {
+      // A normal chat message must not disappear just because the graph cannot
+      // infer a target or a project scan temporarily fails. The agent loop has
+      // already claimed the Inbox message at this point; returning `reject`
+      // would permanently discard it. Fall back to a validated, context-free
+      // snapshot when the existing Session Surface can still be replaced.
+      if (task && canUseContextFreeFallback(error)) {
+        try {
+          const fallbackTarget = 'context.none';
+          const fallbackResult = contextFreeResult(task, settings.tokenBudget);
+          const fallbackValidation = {
+            valid: true,
+            errors: [],
+            warnings: [`Context Graph injection skipped: ${error.message || String(error)}`],
+            details: [],
+            actionRequired: [],
+          };
+          const fallbackSnapshot = createContextSnapshot(fallbackResult, fallbackTarget, { mode: config.firewallMode });
+          const fallbackPlacement = {
+            ...placeContextSnapshot(agent.session, fallbackSnapshot, { mode: config.firewallMode }),
+            fallback: true,
+          };
+          const fallbackOutput = config.firewallMode === 'enforce' ? allowedMessages : decision.messages;
+          const fallbackAudit = {
+            ...createContextAudit({
+              status: 'allowed',
+              mode: config.firewallMode,
+              turn,
+              step,
+              task,
+              target: fallbackTarget,
+              result: fallbackResult,
+              validation: fallbackValidation,
+              placement: fallbackPlacement,
+              raw: rawContext,
+              stepMessages: decision.messages.length,
+              allowedStepMessages: fallbackOutput.length,
+              expectedMessages: [fallbackSnapshot, ...fallbackOutput],
+            }),
+            graphInjection: 'fallback-context-free',
+            fallbackReason: error.message || String(error),
+          };
+          sessionState.set(key, {
+            ...state,
+            target: fallbackTarget,
+            firewallTurnKey: turnKey,
+            fingerprint: fallbackAudit.compiledFingerprint,
+            reusableFingerprint: `context-free\0${task}`,
+            lastCompilation: { task, target: fallbackTarget, result: fallbackResult, validation: fallbackValidation, snapshot: fallbackSnapshot, graphInjection: 'fallback-context-free' },
+            lastAudit: fallbackAudit,
+          });
+          if (fallbackPlacement.action === 'prepend' || fallbackPlacement.action === 'audit-prepend') return { kind: 'enter', messages: [fallbackSnapshot, ...fallbackOutput] };
+          return { kind: 'enter', messages: fallbackOutput };
+        } catch (fallbackError) {
+          error = fallbackError;
+        }
+      }
       const blockedValidation = validation || {
         valid: false,
         errors: [error.message || String(error)],
@@ -519,6 +575,14 @@ function contextFreeResult(task, tokenBudget) {
     excludedTokens: 0,
     reusableContextFingerprint: 'context-free',
   };
+}
+
+function canUseContextFreeFallback(error) {
+  const code = error?.code;
+  return code !== 'CONTEXT_ABORTED'
+    && code !== 'CONTEXT_SURFACE_UNAVAILABLE'
+    && code !== 'CONTEXT_VALIDATION_FAILED'
+    && code !== 'CONTEXT_FORCE_EXCLUDE_AMBIGUOUS';
 }
 
 async function compileStepContext(agent, task, config, selected, signal) {
