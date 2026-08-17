@@ -55,6 +55,51 @@ DSH_HARNESS_DIR=~/deepseek-harness ./scripts/install-linux.sh
 
 `--dump-config` 中应出现 `context-graph`。如果你安装的是全局 CLI，请把 `pnpm dsh` 整体替换为 `dsh`；`pnpm dlx ...` 是另一种完整调用方式，不能只去掉其中的 `pnpm`。`web` 是 DSH 的独立应用命令，它固定使用 `web` profile，因此不能写成 `pnpm dsh --profile web web`。插件没有 `prepare` 构建脚本，从 GitHub 安装不需要放开 pnpm 的安装期代码执行。
 
+## 卸载插件
+
+先停止正在运行的 Harness，再按安装时使用的 profile 清理。下面以 `web` 为例；如果安装时使用的是 `default`，将命令中的 `web` 替换为 `default`。
+
+```bash
+# 先尝试通过 DSH CLI 卸载
+cd ~/deepseek-harness
+pnpm dsh plugin --profile web remove dsh-context-graph
+```
+
+如果 CLI 报 `ERR_PNPM_CANNOT_REMOVE_MISSING_DEPS`，说明依赖不在当前 profile 的 `package.json` 中，或者插件仍由 patch 层加载。检查三个可能的位置：
+
+```bash
+grep -RniE 'dsh-context-graph|context-graph' \
+  ~/deepseek-harness/package.json \
+  ~/.dsh/profiles/web/package.json \
+  ~/.dsh/profiles/web/cordis.patch.yml 2>/dev/null
+```
+
+根据搜索结果执行对应清理：
+
+```bash
+# 依赖出现在 Harness workspace
+cd ~/deepseek-harness
+pnpm remove dsh-context-graph
+
+# 依赖出现在 profile
+cd ~/.dsh/profiles/web
+pnpm remove dsh-context-graph
+```
+
+如果 `cordis.patch.yml` 中仍有 `id: context-graph` / `name: dsh-context-graph` 的插件块，删除该插件块后重启 Harness。最后在浏览器执行一次强制刷新（`Ctrl+Shift+R`）。项目下的 `.context/` 目录只是图谱数据，不负责加载按钮；只有在不再需要历史图谱时才单独删除它。
+
+## C/C++ 解析支持
+
+`dependency_discover_modules` 已支持 C/C++ 项目的增量扫描，无需安装 clang。支持的文件扩展名为：
+
+```text
+.c  .cc  .cpp  .cxx  .h  .hh  .hpp  .hxx
+```
+
+扫描器会提取可由源码直接确认的事实：项目内 `#include` 依赖、类和结构体、函数定义与声明、唯一可确认的函数调用，以及继承关系。源文件和头文件都会生成独立模块 ID，头文件保留扩展名，避免同名文件冲突；变更文件可用于增量扫描。
+
+解析保持保守：宏展开、模板/重载歧义、条件编译和外部库符号无法唯一确认时不会猜测关系，也不会因为扫描结果自动改写源码或 Context Graph。可用 `dependency_analyze_module`、`dependency_find_callers`、`dependency_find_callees` 和 `dependency_extract_interface` 查看事实与接口；确认后的手工关系使用 `MANUAL` 模式，并受一致性检查保护。
+
 ## 在 DSH 中使用
 
 插件注册以下模型可调用工具：
