@@ -261,6 +261,7 @@ export function inspectFinalRequest(options = {}) {
 
 export function auditFinalRequest(previous, options = {}, {
   enforce = true,
+  allowContextFree = false,
   requestTokenBudget = previous?.requestTokenBudget ?? null,
   outputReserveTokens = previous?.outputReserveTokens ?? 0,
   tokenSafetyRatio = previous?.tokenSafetyRatio ?? 1,
@@ -271,7 +272,7 @@ export function auditFinalRequest(previous, options = {}, {
     ? inspectFinalRequest({ system: authorizedRequestHeader.system, tools: authorizedRequestHeader.tools })
     : null;
   const errors = [];
-  if (final.snapshotCount !== 1) errors.push(`Final request must contain exactly one Context Graph snapshot; found ${final.snapshotCount}`);
+  if (!allowContextFree && final.snapshotCount !== 1) errors.push(`Final request must contain exactly one Context Graph snapshot; found ${final.snapshotCount}`);
   if (final.snapshotCount === 1 && !previous?.snapshotFingerprint) errors.push('Context Firewall has no compiled snapshot fingerprint for this request');
   if (final.snapshotCount === 1 && previous?.snapshotFingerprint && final.snapshotFingerprints[0] !== previous.snapshotFingerprint) errors.push('Final Context Graph snapshot does not match the context compiled for this turn');
   if (!Array.isArray(previous?.expectedMessageFingerprints)) {

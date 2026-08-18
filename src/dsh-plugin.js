@@ -250,6 +250,13 @@ export function apply(ctx, input = {}) {
           error = fallbackError;
         }
       }
+      if (task && error?.code === 'CONTEXT_SURFACE_UNAVAILABLE') {
+        const fallbackResult = contextFreeResult(task, settings.tokenBudget);
+        const fallbackValidation = { valid: true, errors: [], warnings: [error.message || String(error)], details: [], actionRequired: [] };
+        const fallbackAudit = createContextAudit({ status: 'allowed', mode: config.firewallMode, turn, step, task, target: 'context.none', result: fallbackResult, validation: fallbackValidation, placement: { action: 'context-free-no-surface', surfaceNodesBefore: rawContext.surfaceMessages }, raw: rawContext, stepMessages: decision.messages.length, allowedStepMessages: allowedMessages.length, expectedMessages: allowedMessages });
+        sessionState.set(key, { ...state, firewallTurnKey: turnKey, target: 'context.none', lastCompilation: { task, target: 'context.none', result: fallbackResult, validation: fallbackValidation, graphInjection: 'context-free-no-surface', snapshot: null }, lastAudit: { ...fallbackAudit, graphInjection: 'context-free-no-surface' } });
+        return { kind: 'enter', messages: allowedMessages };
+      }
       const blockedValidation = validation || {
         valid: false,
         errors: [error.message || String(error)],
@@ -275,6 +282,7 @@ export function apply(ctx, input = {}) {
     });
     const audit = auditFinalRequest(previousAudit, options, {
       enforce: config.firewallMode === 'enforce',
+      allowContextFree: state?.lastCompilation?.graphInjection === 'context-free-no-surface',
       requestTokenBudget: config.requestTokenBudget,
       outputReserveTokens: config.outputReserveTokens,
       tokenSafetyRatio: config.tokenSafetyRatio,
