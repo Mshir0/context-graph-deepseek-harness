@@ -80,6 +80,12 @@ test('step filtering keeps trusted input and rejects unapproved plugin instructi
   assert.deepEqual(filterNewTurnMessages(messages, { allowedInstructionPlugins: ['rules'] }), [messages[0], messages[1], messages[3], messages[4], messages[5]]);
 });
 
+test('step filtering drops older ordinary user history from a new turn', () => {
+  const older = { role: 'user', content: [{ type: 'text', text: 'old conversation' }], source: { kind: 'user' } };
+  const current = { role: 'user', content: [{ type: 'text', text: 'current request' }], source: { kind: 'user' } };
+  assert.deepEqual(filterNewTurnMessages([older, current]), [current]);
+});
+
 test('audits the frozen final request and rejects missing or unauthorized snapshots', () => {
   const snapshot = createContextSnapshot(compiled(), 'function.editor');
   const options = Object.freeze({

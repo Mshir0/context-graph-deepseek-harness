@@ -111,7 +111,18 @@ export function contextWithoutCurrentTask(context, task = '') {
 
 export function filterNewTurnMessages(messages, { allowedInstructionPlugins = [] } = {}) {
   const trustedInstructionPlugins = new Set(allowedInstructionPlugins);
-  return (messages || []).filter(message => {
+  const sourceMessages = messages || [];
+  let latestOrdinaryUser = -1;
+  for (let index = sourceMessages.length - 1; index >= 0; index -= 1) {
+    const message = sourceMessages[index];
+    if (message?.role !== 'user') continue;
+    const kind = message?.source?.kind;
+    if (kind !== 'plugin' && kind !== 'tool' && kind !== 'client-input') {
+      latestOrdinaryUser = index;
+      break;
+    }
+  }
+  return sourceMessages.filter((message, index) => {
     if (message?.source?.form === 'instructions') {
       return message?.source?.kind !== 'plugin' || trustedInstructionPlugins.has(message.source.plugin);
     }
@@ -120,7 +131,9 @@ export function filterNewTurnMessages(messages, { allowedInstructionPlugins = []
     // MessageSource is merge-extensible. Keep user-role messages from new
     // Harness producers; only explicit plugin messages are dynamic context
     // and must be denied unless their instruction producer is trusted.
-    return kind !== 'plugin';
+    if (kind === 'plugin') return false;
+    if (kind === 'tool' || kind === 'client-input') return true;
+    return index === latestOrdinaryUser;
   });
 }
 
