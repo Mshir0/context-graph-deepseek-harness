@@ -59,6 +59,15 @@ Context Compiler
 
 源文件和头文件使用独立模块 ID，避免同名文件冲突。无法唯一确认的关系会保留为未知，不会自动写入错误依赖。
 
+### PDF 章节按需阅读
+
+- `document_scan` 只读取 PDF 元数据和原生目录，先建立文档、章节与层级关系。
+- `document_find_sections` 根据当前任务匹配目录标题，不预先加载整本正文。
+- `document_extract_sections` 只提取选中章节的页码范围，并在内容中保留文件与页码引用。
+- `apply=true` 时，提取结果保存到对应 `documentation` 节点，之后可由 Context Compiler 按预算选择。
+
+第一版不执行 OCR，也不会为没有原生书签的 PDF 猜测目录；此类文件会返回 `outlineAvailable: false`。
+
 ### 上下文编译与防火墙
 
 - 从任务或功能目标开始，只选择相关的结构化上下文和少量实现文件。
@@ -79,6 +88,13 @@ Context Compiler
 - DeepSeek Harness `0.1.0-rc.6` 或更新的 `0.1.x`
 - Node.js `^22.19.0` 或 `>=24`
 - Python 3（用于 Python AST 和 C/C++ 依赖事实提取；缺失时使用轻量回退扫描）
+- [PyMuPDF](https://pymupdf.readthedocs.io/) 或 `pypdf`（PDF 目录和章节文本提取；优先使用 PyMuPDF）
+
+启用 PDF 支持：
+
+```bash
+python3 -m pip install pymupdf
+```
 
 ## 安装
 
@@ -154,8 +170,11 @@ pnpm dsh web
 | `dependency_find_callers` / `dependency_find_callees` | 查询调用方和被调用方 |
 | `dependency_extract_interface` | 提取函数/类的接口契约 |
 | `context_extract` | 从对话提取可确认的结构化记忆 |
+| `document_scan` | 读取 PDF 原生目录并建立章节图谱 |
+| `document_find_sections` | 按任务匹配目录章节，不读取正文 |
+| `document_extract_sections` | 按页提取选中章节并可持久化到图谱 |
 
-随插件发布的 Skills 按职责拆分为 `module-discovery`、`dependency-analysis`、`interface-contract`、`context-extraction`、`context-routing`、`context-maintenance`、`context-compiler` 和 `context-firewall`。
+随插件发布的 Skills 按职责拆分为 `module-discovery`、`dependency-analysis`、`interface-contract`、`document-analysis`、`context-extraction`、`context-routing`、`context-maintenance`、`context-compiler` 和 `context-firewall`。
 
 ## 配置
 

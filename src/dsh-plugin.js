@@ -26,6 +26,7 @@ import { analyzeContextProject, applyContextInvalidation } from './project-analy
 import { resolveSessionContextSettings, updateSessionContextSettings } from './session-context.js';
 import { applyExtraction, detectContextConflicts, extractContext } from './context-extraction.js';
 import { applyFunctionalInference, inferFunctionalModules, mergeFunctionalNodes, splitFunctionalNode } from './semantic-functional.js';
+import { extractPdfSections, findPdfSections, scanPdfDocument } from './document-pdf.js';
 import {
   analyzeDependencies,
   analyzeModule,
@@ -73,7 +74,7 @@ export function apply(ctx, input = {}) {
   ctx.systemPrompt.section({
     name: 'context-graph:policy',
     order: 99,
-    text: 'Treat the Semantic Functional Graph as WHAT the system does and the Implementation Graph as HOW code realizes it. Use context_graph_scan for implementation changes and functional_infer only for reviewed Functional proposals. Never expose imports or calls as Functional edges. Use context_extract for durable structured knowledge. Compile from Task or Functional entries, resolve only relevant implementation mappings, and preserve MANUAL, FORCE_INCLUDE, and FORCE_EXCLUDE choices.',
+    text: 'Treat the Semantic Functional Graph as WHAT the system does and the Implementation Graph as HOW code realizes it. Use context_graph_scan for implementation changes and functional_infer only for reviewed Functional proposals. Never expose imports or calls as Functional edges. Use context_extract for durable structured knowledge. For PDFs, call document_scan, then document_find_sections, and extract only selected sections with document_extract_sections. Compile from Task or Functional entries, resolve only relevant implementation mappings, and preserve MANUAL, FORCE_INCLUDE, and FORCE_EXCLUDE choices.',
   });
 
   ctx.on('agent/session-start', ({ agent }) => {
@@ -508,6 +509,46 @@ function registerTools(ctx, config, sessionState) {
     description: 'Read concise Git status and recent relevant history from the current DSH workspace.',
     parameters: { target_path: { type: 'string', description: 'Optional module-relative file path.' } },
     async execute(args, exec) { return JSON.stringify(await gitSummary(workspaceOf(exec), args.target_path || ''), null, 2); },
+  }));
+
+  ctx.tools.register(textTool({
+    name: 'document_scan',
+    description: 'Read a workspace PDF native outline and save document/section nodes in Context Graph. This does not extract the full PDF body.',
+    parameters: { path: { type: 'string', required: true, description: 'Workspace-relative .pdf path.' } },
+    async execute(args, exec) {
+      const root = workspaceOf(exec);
+      const result = await scanPdfDocument({ projectPath: root, filePath: args.path, graph: await loadGraph(root) });
+      const graph = await saveGraph(root, result.graph);
+      return JSON.stringify({ document: result.document, sections: result.sections.map(node => ({ id: node.id, title: node.title, level: node.metadata.level, pageStart: node.metadata.pageStart, pageEnd: node.metadata.pageEnd })), outlineAvailable: result.outlineAvailable, documentHash: result.document.metadata.documentHash, nodesSaved: graph.nodes.length }, null, 2);
+    },
+  }));
+
+  ctx.tools.register(textTool({
+    name: 'document_find_sections',
+    description: 'Rank PDF outline sections for the current task without reading section body text.',
+    parameters: {
+      document: { type: 'string', required: true, description: 'PDF document node id or workspace-relative PDF path.' },
+      task: { type: 'string', required: true, description: 'Task used to match outline titles.' },
+      max_sections: { type: 'integer', description: 'Maximum matches, from 1 to 20. Defaults to 5.' },
+    },
+    async execute(args, exec) { return JSON.stringify(findPdfSections(await loadGraph(workspaceOf(exec)), { document: args.document, task: args.task, maxSections: args.max_sections }), null, 2); },
+  }));
+
+  ctx.tools.register(textTool({
+    name: 'document_extract_sections',
+    description: 'Extract text only from selected PDF outline sections. Set apply=true to save cited section text into Context Graph.',
+    parameters: {
+      section_ids: { type: 'array', items: { type: 'string' }, required: true, description: 'PDF section node ids returned by document_find_sections.' },
+      max_tokens: { type: 'integer', description: 'Combined extraction budget, from 100 to 50000. Defaults to 12000.' },
+      apply: { type: 'boolean', description: 'Persist extracted, page-cited content into the section nodes.' },
+    },
+    async execute(args, exec) {
+      const root = workspaceOf(exec);
+      const result = await extractPdfSections({ projectPath: root, graph: await loadGraph(root), sectionIds: args.section_ids, maxTokens: args.max_tokens, apply: args.apply === true });
+      if (result.applied) await saveGraph(root, result.graph);
+      const { graph: _graph, ...output } = result;
+      return JSON.stringify(output, null, 2);
+    },
   }));
 
   registerDependencyTools(ctx);
