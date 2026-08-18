@@ -103,6 +103,20 @@ python3 -m venv .venv-pdf
 
 ## 安装
 
+### 本地源码安装（推荐用于验证修复）
+
+插件源码必须位于 WSL 文件系统中。可以将当前源码复制到 WSL，或在 WSL 中克隆后作为本地依赖使用：
+
+```bash
+cd ~/deepseek-harness
+git clone https://github.com/Mshir0/context-graph-deepseek-harness.git ~/context-graph-deepseek-harness
+pnpm dsh plugin --profile web add -w /home/mashiro/context-graph-deepseek-harness
+pnpm dsh --profile web --dump-config
+pnpm dsh web
+```
+
+修改 `/home/mashiro/context-graph-deepseek-harness` 中的源码后，重新执行 `add -w` 并重启 Harness。这样加载的是本地源码，不会使用旧的 GitHub 包缓存。
+
 ### 从 GitHub 安装
 
 ```bash
@@ -129,7 +143,7 @@ pnpm dsh web
 
 修改插件源码后重新执行 `pnpm dsh plugin ... add -w`，然后重启 `pnpm dsh web`。
 
-### 本地开发路径安装
+### 其他本地开发路径
 
 在 Harness 源码目录执行：
 
