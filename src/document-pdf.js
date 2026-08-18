@@ -9,6 +9,7 @@ import { promisify } from 'node:util';
 const execFileAsync = promisify(execFile);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const MAX_EXTRACT_PAGES = 200;
+const PDF_ANALYZER_TIMEOUT_MS = 30_000;
 
 function pdfError(message, code = 'PDF_ANALYSIS_FAILED') {
   const error = new Error(message);
@@ -47,7 +48,11 @@ export async function runPdfAnalyzer(command, filename, range = {}, options = {}
   let dependencyError;
   for (const executable of candidates) {
     try {
-      const { stdout, stderr } = await execFileAsync(executable, args, { maxBuffer: 32 * 1024 * 1024 });
+      const { stdout, stderr } = await execFileAsync(executable, args, {
+        maxBuffer: 32 * 1024 * 1024,
+        timeout: PDF_ANALYZER_TIMEOUT_MS,
+        killSignal: 'SIGKILL',
+      });
       return parseAnalyzerOutput(stdout, stderr);
     } catch (error) {
       lastError = error;
