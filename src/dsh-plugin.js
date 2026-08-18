@@ -280,6 +280,35 @@ export function apply(ctx, input = {}) {
       tokenSafetyRatio: config.tokenSafetyRatio,
       authorizedRequestHeader: requestHeaderOf(state?.agent?.session),
     });
+    // If only the requested output reserve exceeds the configured envelope,
+    // reduce maxTokens to the remaining budget before sending. This preserves
+    // the user's input without forwarding an oversized request. Keep all
+    // envelope, snapshot, and plugin message integrity failures fail-closed.
+    if (config.firewallMode === 'enforce' && audit.validation?.errors?.length) {
+      const budgetOnly = audit.validation.errors.every(error => /^Final request estimate uses .* above the .* token budget$/u.test(String(error)));
+      if (budgetOnly) {
+        const remaining = Number(audit.requestTokenBudget) - Number(audit.guardedInputTokens);
+        const hasOutputLimit = Number.isInteger(options.maxTokens) && options.maxTokens > 0;
+        const canFit = remaining >= 1 && hasOutputLimit && options.maxTokens <= remaining;
+        const canClamp = remaining >= 1 && hasOutputLimit && options.maxTokens > remaining;
+        if (canClamp) {
+          options.maxTokens = remaining;
+          audit.outputReserveTokens = remaining;
+          audit.finalEstimatedTotalTokens = audit.guardedInputTokens + remaining;
+          audit.requestBudgetExceeded = false;
+        }
+        if (canFit || canClamp) {
+          audit.validation = {
+            ...audit.validation,
+            valid: true,
+            warnings: [...new Set([...(audit.validation.warnings || []), ...audit.validation.errors])],
+            errors: [],
+          };
+          audit.status = 'allowed';
+          audit.requestBudgetExceeded = false;
+        }
+      }
+    }
     sessionState.set(key, { ...(state || {}), lastAudit: audit });
     if (config.firewallMode === 'enforce' && !audit.validation.valid) {
       ctx.logger.warn(`context-graph: final LLM request blocked by Context Firewall: ${audit.error}`);
