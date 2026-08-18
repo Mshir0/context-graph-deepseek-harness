@@ -55,6 +55,34 @@ export function checkConsistency(facts, graph) {
   const conflicts = graphEdges.filter(edge => edge.mode === 'FORCE_EXCLUDE' || edge.type === 'force_exclude').map(edge => ({ edge: { source: edge.source, target: edge.target }, facts: validateRelationship(facts, edge).relationships })).filter(item => item.facts.some(fact => ['CALL', 'INHERIT'].includes(fact.type) && fact.confidence >= 0.9));
   return { missing, stale, protected: protectedEdges, conflicts };
 }
+
+export function summarizeConsistency(report, { modules = [], maxItems = 50 } = {}) {
+  const scope = new Set(modules.filter(item => typeof item === 'string' && item));
+  const matchesScope = item => {
+    if (scope.size === 0) return true;
+    const source = item.source || item.from || item.edge?.source;
+    const target = item.target || item.to || item.edge?.target;
+    return scope.has(source) || scope.has(target);
+  };
+  const categories = ['missing', 'stale', 'protected', 'conflicts'];
+  const scoped = Object.fromEntries(categories.map(key => [key, (report?.[key] || []).filter(matchesScope)]));
+  const limit = Number.isInteger(maxItems) ? Math.max(1, Math.min(200, maxItems)) : 50;
+  let remaining = limit;
+  const details = {};
+  for (const key of categories) {
+    details[key] = scoped[key].slice(0, remaining);
+    remaining -= details[key].length;
+  }
+  const counts = Object.fromEntries(categories.map(key => [key, scoped[key].length]));
+  const returned = Object.fromEntries(categories.map(key => [key, details[key].length]));
+  return {
+    scope: { modules: [...scope], maxItems: limit },
+    counts,
+    returned,
+    omitted: Object.values(counts).reduce((sum, count) => sum + count, 0) - Object.values(returned).reduce((sum, count) => sum + count, 0),
+    ...details,
+  };
+}
 export function detectGraphChanges(previousFacts, nextFacts, { files = [] } = {}) {
   const key = item => `${item.from}\0${item.to}\0${item.type}\0${item.symbol || ''}`;
   const affected = new Set(files.map(file => file.replaceAll('\\', '/')));

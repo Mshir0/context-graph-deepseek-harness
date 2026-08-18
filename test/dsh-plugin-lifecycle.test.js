@@ -4,10 +4,26 @@ import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { createAssistantMessage, createUserMessage, markAgentLoopRequest } from '@deepseek-ai/dsh-llm';
-import { apply, isAgentLoopRequest } from '../src/dsh-plugin.js';
+import { apply, isAgentLoopRequest, summarizeGraph } from '../src/dsh-plugin.js';
 import { ContextFirewallError } from '../src/context-firewall.js';
 import { emptyGraph, loadGraph, normalizeGraph, saveGraph } from '../src/core.js';
 import { loadFactsCache } from '../src/implementation-index.js';
+
+test('bounds graph tool output and omits node content by default', () => {
+  const graph = {
+    ...emptyGraph('.'),
+    nodes: [
+      { id: 'a', type: 'code_module', content: 'large source body' },
+      { id: 'b', type: 'code_module', description: 'large description' },
+    ],
+    edges: [{ source: 'a', target: 'b', type: 'reference' }],
+  };
+  const summary = summarizeGraph(graph, { max_nodes: 1, max_edges: 1 });
+  assert.equal(summary.nodes.length, 1);
+  assert.equal(summary.nodes[0].content, undefined);
+  assert.equal(summary.summary.nodeCount, 2);
+  assert.equal(summary.summary.truncated, true);
+});
 
 function createHarnessContext() {
   const handlers = new Map();

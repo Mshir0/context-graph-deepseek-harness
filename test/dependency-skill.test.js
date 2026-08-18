@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { analyzeDependencies, checkConsistency, detectGraphChanges, extractInterface, findCallers, proposeContextEdges } from '../src/dependency-skill.js';
+import { analyzeDependencies, checkConsistency, detectGraphChanges, extractInterface, findCallers, proposeContextEdges, summarizeConsistency } from '../src/dependency-skill.js';
 import { analyzeContextProject } from '../src/project-analysis.js';
 
 async function fixture() {
@@ -135,6 +135,24 @@ test('proposes interfaces and preserves manual graph relationships in consistenc
   assert.ok(report.protected.some(edge => edge.source === 'a' && edge.target === 'manual' && edge.mode === 'MANUAL'));
   assert.ok(report.protected.some(edge => edge.target === 'lowercase-manual' && edge.mode === 'manual'));
   assert.equal(report.conflicts.length, 1);
+});
+
+test('bounds consistency details and supports module scope', () => {
+  const report = {
+    missing: [
+      { from: 'a', to: 'b' },
+      { from: 'c', to: 'd' },
+      { from: 'a', to: 'e' },
+    ],
+    stale: [{ source: 'a', target: 'gone' }],
+    protected: [{ source: 'manual', target: 'kept' }],
+    conflicts: [],
+  };
+  const summary = summarizeConsistency(report, { modules: ['a'], maxItems: 2 });
+  assert.deepEqual(summary.counts, { missing: 2, stale: 1, protected: 0, conflicts: 0 });
+  assert.deepEqual(summary.returned, { missing: 2, stale: 0, protected: 0, conflicts: 0 });
+  assert.equal(summary.omitted, 1);
+  assert.deepEqual(summary.missing.map(item => item.to), ['b', 'e']);
 });
 
 test('reports relationship additions and removals for incremental analysis snapshots', () => {

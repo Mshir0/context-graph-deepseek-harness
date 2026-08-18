@@ -39,6 +39,7 @@ import {
   findCallers,
   findRelatedModules,
   proposeContextEdges,
+  summarizeConsistency,
   validateRelationship,
 } from './dependency-skill.js';
 
@@ -390,9 +391,13 @@ function registerTools(ctx, config, sessionState) {
 
   ctx.tools.register(textTool({
     name: 'context_graph_get',
-    description: 'Read the current workspace Context Graph, including nodes, typed edges, scopes, and manual overrides.',
-    parameters: {},
-    async execute(_args, exec) { return JSON.stringify(await loadGraph(workspaceOf(exec)), null, 2); },
+    description: 'Read a bounded summary of the current workspace Context Graph. Node content is omitted by default; request it only for a small graph slice.',
+    parameters: {
+      max_nodes: { type: 'integer', description: 'Maximum nodes returned, from 1 to 500. Defaults to 100.' },
+      max_edges: { type: 'integer', description: 'Maximum edges returned, from 1 to 1000. Defaults to 200.' },
+      include_content: { type: 'boolean', description: 'Include node content. Defaults to false.' },
+    },
+    async execute(args, exec) { return JSON.stringify(summarizeGraph(await loadGraph(workspaceOf(exec)), args), null, 2); },
   }));
 
   ctx.tools.register(textTool({
@@ -513,13 +518,18 @@ function registerTools(ctx, config, sessionState) {
 
   ctx.tools.register(textTool({
     name: 'document_scan',
-    description: 'Read a workspace PDF native outline and save document/section nodes in Context Graph. This does not extract the full PDF body.',
-    parameters: { path: { type: 'string', required: true, description: 'Workspace-relative .pdf path.' } },
+    description: 'Read a workspace PDF native outline and save document/section nodes in Context Graph. Returns a bounded outline summary and does not extract the full PDF body.',
+    parameters: {
+      path: { type: 'string', required: true, description: 'Workspace-relative .pdf path.' },
+      max_items: { type: 'integer', description: 'Maximum outline entries returned, from 1 to 500. Defaults to 50.' },
+    },
     async execute(args, exec) {
       const root = workspaceOf(exec);
       const result = await scanPdfDocument({ projectPath: root, filePath: args.path, graph: await loadGraph(root) });
       const graph = await saveGraph(root, result.graph);
-      return JSON.stringify({ document: result.document, sections: result.sections.map(node => ({ id: node.id, title: node.title, level: node.metadata.level, pageStart: node.metadata.pageStart, pageEnd: node.metadata.pageEnd })), outlineAvailable: result.outlineAvailable, documentHash: result.document.metadata.documentHash, nodesSaved: graph.nodes.length }, null, 2);
+      const limit = boundedInteger(args.max_items, 50, 1, 500);
+      const sections = result.sections.slice(0, limit).map(node => ({ id: node.id, title: node.title, level: node.metadata.level, pageStart: node.metadata.pageStart, pageEnd: node.metadata.pageEnd }));
+      return JSON.stringify({ document: result.document, sectionCount: result.sections.length, sections, omitted: result.sections.length - sections.length, outlineAvailable: result.outlineAvailable, documentHash: result.document.metadata.documentHash, nodesSaved: graph.nodes.length }, null, 2);
     },
   }));
 
@@ -603,8 +613,20 @@ function registerDependencyTools(ctx) {
     async execute(args, exec) { return JSON.stringify(validateRelationship(await factsFor(exec), args), null, 2); },
   }));
   ctx.tools.register(textTool({
-    name: 'dependency_check_consistency', description: 'Report missing, stale, protected, and force-exclude conflict edges. Never changes Context Graph.', parameters: {},
-    async execute(_args, exec) { const root = workspaceOf(exec); return JSON.stringify(checkConsistency(await factsFor(exec), await loadGraph(root)), null, 2); },
+    name: 'dependency_check_consistency',
+    description: 'Report a bounded summary of missing, stale, protected, and force-exclude conflict edges. Scope large repositories with files or modules. Never changes Context Graph.',
+    parameters: {
+      files: { type: 'array', items: { type: 'string' }, description: 'Changed project-relative source/header files used to limit analysis.' },
+      modules: { type: 'array', items: { type: 'string' }, description: 'Module ids used to filter returned consistency details.' },
+      max_items: { type: 'integer', description: 'Maximum combined detail rows returned, from 1 to 200. Defaults to 50.' },
+    },
+    async execute(args, exec) {
+      const root = workspaceOf(exec);
+      const facts = await factsFor(exec, args.files || []);
+      const modules = args.modules?.length ? args.modules : (args.files?.length ? discoverModules(facts).map(item => item.id) : []);
+      const report = checkConsistency(facts, await loadGraph(root));
+      return JSON.stringify(summarizeConsistency(report, { modules, maxItems: args.max_items }), null, 2);
+    },
   }));
   ctx.tools.register(textTool({
     name: 'dependency_detect_changes', description: 'Compare a previous Dependency Skill JSON result with current facts and return added/removed relationships.', parameters: { previous_facts_json: { type: 'string', required: true, description: 'Earlier complete Dependency Skill JSON result.' }, files: { type: 'array', items: { type: 'string' }, description: 'Optional changed Python, C, or C++ source/header files for incremental current analysis.' } },
@@ -618,6 +640,39 @@ function textTool(definition) {
     output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
     presentCall: args => ({ card: 'generic', kind: 'read', title: definition.name.replaceAll('_', ' '), rawInput: args }),
   });
+}
+
+function boundedInteger(value, fallback, minimum, maximum) {
+  return Number.isInteger(value) ? Math.max(minimum, Math.min(maximum, value)) : fallback;
+}
+
+export function summarizeGraph(graph, options = {}) {
+  const maxNodes = boundedInteger(options.max_nodes, 100, 1, 500);
+  const maxEdges = boundedInteger(options.max_edges, 200, 1, 1000);
+  const nodes = (graph.nodes || []).slice(0, maxNodes).map(node => {
+    if (options.include_content === true) return node;
+    const { content: _content, description: _description, ...summary } = node;
+    return summary;
+  });
+  const nodeIds = new Set(nodes.map(node => node.id));
+  const eligibleEdges = (graph.edges || []).filter(edge => nodeIds.has(edge.source) || nodeIds.has(edge.target));
+  const edges = eligibleEdges.slice(0, maxEdges);
+  const mappings = (graph.mappings || []).filter(mapping => nodeIds.has(mapping.functional) || (mapping.implementation || []).some(item => nodeIds.has(item.id)));
+  return {
+    ...graph,
+    nodes,
+    edges,
+    mappings,
+    summary: {
+      nodeCount: graph.nodes?.length || 0,
+      edgeCount: graph.edges?.length || 0,
+      mappingCount: graph.mappings?.length || 0,
+      returnedNodes: nodes.length,
+      returnedEdges: edges.length,
+      contentIncluded: options.include_content === true,
+      truncated: nodes.length < (graph.nodes?.length || 0) || edges.length < eligibleEdges.length,
+    },
+  };
 }
 
 function contextFreeResult(task, tokenBudget) {

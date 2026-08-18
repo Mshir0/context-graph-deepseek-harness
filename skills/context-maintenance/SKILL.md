@@ -5,4 +5,4 @@ description: Maintain Context Graph after code or structured context changes. Us
 
 # Context Maintenance
 
-Use `dependency_detect_changes`, `dependency_check_consistency`, and `context_detect_conflicts`. Return proposals for review. Never automatically delete manual edges or old requirements; represent an explicit replacement with `supersedes` and retain provenance.
+Use `dependency_detect_changes`, `dependency_check_consistency`, and `context_detect_conflicts`. For a repository-wide graph, pass the files changed in the current task to `dependency_check_consistency`; only request an unscoped check when the user explicitly asks for a full-project audit. Keep `max_items` small and use the returned counts instead of requesting omitted details unless they block the task. Return proposals for review. Never automatically delete manual edges or old requirements; represent an explicit replacement with `supersedes` and retain provenance.

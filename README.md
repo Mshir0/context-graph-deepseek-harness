@@ -170,8 +170,9 @@ pnpm dsh web
 | `dependency_analyze_module` | 查看模块关系、接口和证据 |
 | `dependency_find_callers` / `dependency_find_callees` | 查询调用方和被调用方 |
 | `dependency_extract_interface` | 提取函数/类的接口契约 |
+| `dependency_check_consistency` | 按文件或模块检查一致性，默认最多返回 50 条明细 |
 | `context_extract` | 从对话提取可确认的结构化记忆 |
-| `document_scan` | 读取 PDF 原生目录并建立章节图谱 |
+| `document_scan` | 读取 PDF 原生目录并建立章节图谱，默认返回前 50 项 |
 | `document_find_sections` | 按任务匹配目录章节，不读取正文 |
 | `document_extract_sections` | 按页提取选中章节并可持久化到图谱 |
 | `document_extract_layout` | 提取章节内代码块和 Markdown+JSON 表格 |
