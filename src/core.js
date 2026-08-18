@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, writeFile, readdir, stat } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, readdir, stat, open } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
@@ -25,6 +25,10 @@ export const MODES = ['AUTO', 'MANUAL', 'FORCE_INCLUDE', 'FORCE_EXCLUDE'];
 export const SCOPES = ['code', 'context', 'interface', 'contract', 'state', 'decisions', 'history', 'content'];
 const PRIORITIES = ['critical', 'high', 'normal', 'low'];
 const STATUSES = ['active', 'resolved', 'deprecated', 'superseded', 'archived', 'stale'];
+const MAX_GRAPH_BYTES = 16 * 1024 * 1024;
+// Keep persistent memory bounded per request. Project rules are hard context,
+// so an unbounded project.md would bypass the normal candidate token budget.
+const MAX_CONTEXT_FILE_BYTES = 32 * 1024;
 
 export function emptyGraph(projectPath) {
   return { version: 1, projectPath: path.resolve(projectPath), nodes: [], edges: [], mappings: [], overrides: { include: [], exclude: [], deleted: [] }, policy: {}, cache: { revision: '', invalidated: [] } };
@@ -93,7 +97,15 @@ export function validateGraph(graph) {
 
 export async function loadGraph(projectPath) {
   const file = path.join(path.resolve(projectPath), '.context', 'graph.json');
-  try { return normalizeGraph(JSON.parse(await readFile(file, 'utf8')), projectPath); } catch (error) {
+  try {
+    const size = (await stat(file)).size;
+    if (size > MAX_GRAPH_BYTES) {
+      const error = new Error(`Context graph is too large to load safely (${size} bytes; limit ${MAX_GRAPH_BYTES})`);
+      error.code = 'CONTEXT_GRAPH_TOO_LARGE';
+      throw error;
+    }
+    return normalizeGraph(JSON.parse(await readFile(file, 'utf8')), projectPath);
+  } catch (error) {
     if (error.code === 'ENOENT') return emptyGraph(projectPath);
     throw error;
   }
@@ -384,7 +396,21 @@ export async function ensureMemory(projectPath, graph) {
   }
 }
 
-async function optionalRead(file) { try { return await readFile(file, 'utf8'); } catch (error) { if (error.code === 'ENOENT') return ''; throw error; } }
+async function optionalRead(file, maxBytes = MAX_CONTEXT_FILE_BYTES) {
+  let handle;
+  try {
+    handle = await open(file, 'r');
+    const buffer = Buffer.alloc(maxBytes + 1);
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+    const text = buffer.subarray(0, bytesRead).toString('utf8');
+    return bytesRead > maxBytes ? `${text.slice(0, maxBytes)}\n\n[Context file truncated by Context Graph]` : text;
+  } catch (error) {
+    if (error.code === 'ENOENT') return '';
+    throw error;
+  } finally {
+    await handle?.close().catch(() => {});
+  }
+}
 function projectFile(root, relativePath) {
   const project = path.resolve(root);
   const file = path.resolve(project, relativePath);

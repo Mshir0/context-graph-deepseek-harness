@@ -99,6 +99,18 @@ test('compiler prioritizes target, honors force exclude, and respects budget', a
   assert.equal(result.target, 'a'); assert.ok(result.included.some((item) => item.label === 'User task')); assert.ok(result.excluded.some((item) => item.module === 'b' && item.reason === 'FORCE_EXCLUDE'));
 });
 
+test('bounds oversized persistent context files before compilation', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'context-graph-bounded-memory-'));
+  await mkdir(path.join(root, '.context'), { recursive: true });
+  await writeFile(path.join(root, '.context', 'project.md'), 'rule '.repeat(100_000));
+  const graph = emptyGraph(root);
+  graph.nodes = [{ id: 'a', type: 'code_module', path: 'a.py' }];
+  await writeFile(path.join(root, 'a.py'), 'print("a")');
+  const result = await compileContext({ projectPath: root, graph, target: 'a', task: 'inspect a', tokenBudget: 6000 });
+  assert.ok(result.context.includes('[Context file truncated by Context Graph]'));
+  assert.ok(result.context.length < 40_000);
+});
+
 test('legacy Force Include edges remain hard under budget pressure', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'context-graph-legacy-force-'));
   await mkdir(path.join(root, '.context', 'modules', 'a'), { recursive: true });
