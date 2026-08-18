@@ -12,9 +12,12 @@ def fail(message: str, code: str = "PDF_ANALYSIS_FAILED") -> None:
 
 
 try:
-    import fitz  # type: ignore
+    import pymupdf as fitz  # type: ignore
 except ImportError:
-    fitz = None
+    try:
+        import fitz  # type: ignore
+    except ImportError:
+        fitz = None
 
 try:
     from pypdf import PdfReader  # type: ignore

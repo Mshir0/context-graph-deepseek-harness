@@ -4,7 +4,7 @@ import { mkdtemp, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { emptyGraph, validateGraph } from '../src/core.js';
-import { extractPdfLayout, extractPdfSections, findPdfSections, scanPdfDocument } from '../src/document-pdf.js';
+import { extractPdfLayout, extractPdfSections, findPdfSections, pdfPythonCandidates, scanPdfDocument } from '../src/document-pdf.js';
 
 async function fixture() {
   const root = await mkdtemp(path.join(os.tmpdir(), 'context-graph-pdf-'));
@@ -25,6 +25,20 @@ const outlineAnalyzer = async command => {
     ],
   };
 };
+
+test('prefers explicit, project, plugin, and absolute system Python candidates', () => {
+  const env = {
+    CONTEXT_GRAPH_PDF_PYTHON: '/configured/python',
+    VIRTUAL_ENV: '/stale/venv',
+    HOME: '/home/tester',
+  };
+  const candidates = pdfPythonCandidates('/workspace/project', { env, platform: 'linux', pluginRoot: '/plugin' });
+  assert.equal(candidates[0], '/configured/python');
+  assert.ok(candidates.includes(path.join('/workspace/project', '.venv-pdf', 'bin', 'python')));
+  assert.ok(candidates.includes(path.join('/plugin', '.venv-pdf', 'bin', 'python')));
+  assert.ok(candidates.includes(path.join('/home/tester', 'context-graph-deepseek-harness', '.venv-pdf', 'bin', 'python')));
+  assert.ok(candidates.includes('/usr/bin/python3'));
+});
 
 test('scans a native PDF outline into documentation nodes and hierarchy edges', async () => {
   const root = await fixture();

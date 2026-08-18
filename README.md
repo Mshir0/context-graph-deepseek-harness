@@ -94,8 +94,12 @@ Context Compiler
 启用 PDF 支持：
 
 ```bash
-python3 -m pip install pymupdf
+cd ~/context-graph-deepseek-harness
+python3 -m venv .venv-pdf
+.venv-pdf/bin/python -m pip install pymupdf pypdf pdfplumber
 ```
+
+插件会依次查找显式配置、当前虚拟环境、项目 `.venv-pdf` / `.venv`、插件 `.venv-pdf`、用户目录下的插件源码环境和系统 Python。通常无需为 Harness 单独配置环境变量；如需强制指定，仍可设置 `CONTEXT_GRAPH_PDF_PYTHON`。
 
 ## 安装
 

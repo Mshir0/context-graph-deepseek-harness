@@ -38,11 +38,13 @@ function parseAnalyzerOutput(stdout, stderr = '') {
   return parsed;
 }
 
-export async function runPdfAnalyzer(command, filename, range = {}) {
-  const candidates = [process.env.CONTEXT_GRAPH_PDF_PYTHON, process.env.DEPENDENCY_SKILL_PYTHON, ...(process.platform === 'win32' ? ['py', 'python'] : ['python3', 'python'])].filter(Boolean);
+export async function runPdfAnalyzer(command, filename, range = {}, options = {}) {
+  const projectPath = options.projectPath || path.dirname(filename);
+  const candidates = pdfPythonCandidates(projectPath);
   const args = [path.join(HERE, 'analyze_pdf.py'), command, filename];
   if (command === 'extract' || command === 'layout') args.push(String(range.pageStart), String(range.pageEnd));
   let lastError;
+  let dependencyError;
   for (const executable of candidates) {
     try {
       const { stdout, stderr } = await execFileAsync(executable, args, { maxBuffer: 32 * 1024 * 1024 });
@@ -50,10 +52,36 @@ export async function runPdfAnalyzer(command, filename, range = {}) {
     } catch (error) {
       lastError = error;
       const output = String(error.stdout || '').trim();
-      if (output) return parseAnalyzerOutput(output, error.stderr);
+      if (output) try {
+        return parseAnalyzerOutput(output, error.stderr);
+      } catch (parsedError) {
+        if (parsedError.code === 'PDF_DEPENDENCY_MISSING') {
+          dependencyError = parsedError;
+          continue;
+        }
+        throw parsedError;
+      }
     }
   }
+  if (dependencyError) throw dependencyError;
   throw pdfError(lastError?.message || 'Python 3 is required for PDF analysis', 'PDF_ANALYZER_UNAVAILABLE');
+}
+
+export function pdfPythonCandidates(projectPath, { env = process.env, platform = process.platform, pluginRoot = path.resolve(HERE, '..') } = {}) {
+  const windows = platform === 'win32';
+  const relativePython = windows ? path.join('Scripts', 'python.exe') : path.join('bin', 'python');
+  const home = env.HOME || env.USERPROFILE;
+  const candidates = [
+    env.CONTEXT_GRAPH_PDF_PYTHON,
+    env.DEPENDENCY_SKILL_PYTHON,
+    env.VIRTUAL_ENV && path.join(env.VIRTUAL_ENV, relativePython),
+    projectPath && path.join(projectPath, '.venv-pdf', relativePython),
+    projectPath && path.join(projectPath, '.venv', relativePython),
+    path.join(pluginRoot, '.venv-pdf', relativePython),
+    home && path.join(home, 'context-graph-deepseek-harness', '.venv-pdf', relativePython),
+    ...(windows ? ['py', 'python'] : ['/usr/bin/python3', '/usr/local/bin/python3', 'python3', 'python']),
+  ].filter(Boolean);
+  return [...new Set(candidates)];
 }
 
 function documentId(relative) {
@@ -83,7 +111,7 @@ function cleanOutline(value, pageCount) {
 
 export async function scanPdfDocument({ projectPath, filePath, graph, analyze = runPdfAnalyzer }) {
   const file = await workspacePdf(projectPath, filePath);
-  const outline = await analyze('outline', file.filename);
+  const outline = await analyze('outline', file.filename, {}, { projectPath });
   const pageCount = Math.max(1, Number(outline.pageCount) || 1);
   const sections = cleanOutline(outline, pageCount);
   const hash = await fileHash(file.filename);
@@ -192,7 +220,7 @@ export async function extractPdfSections({ projectPath, graph, sectionIds, maxTo
     const pageEnd = Number(section.metadata.pageEnd);
     if (pageEnd - pageStart + 1 > MAX_EXTRACT_PAGES) throw pdfError(`Section exceeds the ${MAX_EXTRACT_PAGES}-page extraction limit: ${section.id}`, 'PDF_SECTION_TOO_LARGE');
     const file = await workspacePdf(projectPath, section.metadata.pdfFile);
-    const result = await analyze('extract', file.filename, { pageStart, pageEnd });
+    const result = await analyze('extract', file.filename, { pageStart, pageEnd }, { projectPath });
     const sourceText = String(result.text || '').trim();
     const text = sourceText.slice(0, Math.max(0, remainingChars));
     remainingChars -= text.length;
@@ -242,7 +270,7 @@ export async function extractPdfLayout({ projectPath, graph, sectionIds, maxToke
     const pageEnd = Number(section.metadata.pageEnd);
     if (pageEnd - pageStart + 1 > MAX_EXTRACT_PAGES) throw pdfError(`Section exceeds the ${MAX_EXTRACT_PAGES}-page extraction limit: ${section.id}`, 'PDF_SECTION_TOO_LARGE');
     const file = await workspacePdf(projectPath, section.metadata.pdfFile);
-    const result = await analyze('layout', file.filename, { pageStart, pageEnd });
+    const result = await analyze('layout', file.filename, { pageStart, pageEnd }, { projectPath });
     const artifacts = [
       ...(Array.isArray(result.codeBlocks) ? result.codeBlocks : []).map((item, index) => ({ kind: 'pdf_code_block', item, index })),
       ...(Array.isArray(result.tables) ? result.tables : []).map((item, index) => ({ kind: 'pdf_table', item, index })),
