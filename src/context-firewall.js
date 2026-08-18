@@ -149,7 +149,20 @@ function canonicalJson(value) {
 }
 
 export function messageFingerprint(message) {
-  return createHash('sha256').update(canonicalJson(message)).digest('hex');
+  // Harness may add ids/timestamps while projecting a message into the final
+  // LLM payload. Fingerprint semantic payload fields only, so projection
+  // metadata cannot make a valid long user turn fail integrity validation.
+  const stable = {
+    role: message?.role,
+    content: message?.content,
+    source: message?.source ? {
+      kind: message.source.kind,
+      plugin: message.source.plugin,
+      form: message.source.form,
+      callId: message.source.callId,
+    } : undefined,
+  };
+  return createHash('sha256').update(canonicalJson(stable)).digest('hex');
 }
 
 export function messageFingerprints(messages = []) {
