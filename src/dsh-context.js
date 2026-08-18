@@ -2,6 +2,10 @@ export function latestUserText(messages) {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
     if (message?.role !== 'user' || ['plugin', 'tool'].includes(message?.source?.kind)) continue;
+    // DSH clients may encode a simple user turn as a string instead of the
+    // normalized array of content blocks. Preserve that turn for targeting
+    // and firewall validation rather than treating it as an empty request.
+    if (typeof message.content === 'string') return message.content.trim();
     const content = Array.isArray(message.content) ? message.content : [];
     return content.filter(block => block?.type === 'text').map(block => block.text || '').join('\n').trim();
   }
@@ -105,7 +109,10 @@ export function inferTarget(task, nodes, { exclude = [] } = {}) {
     const sameAlias = matches.filter(item => item.score === 1 && item.alias === matches[0].alias);
     if (sameAlias.length === 1) return matches[0].node.id;
   }
-  return available.length === 1 ? available[0].id : null;
+  // Do not bind an unrelated chat to the only node in a small project. A
+  // target must be explicit (or matched by its alias); otherwise the caller
+  // uses the context-free path and preserves the user's original request.
+  return null;
 }
 
 export function preview(result, includeContent) {

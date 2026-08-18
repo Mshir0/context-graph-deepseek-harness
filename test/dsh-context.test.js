@@ -26,6 +26,10 @@ test('does not select one arbitrary module for a repeated project alias', () => 
   assert.equal(inferTarget('请修改 requests.src.requests 中的 Session', nodes), 'requests.src.requests');
 });
 
+test('does not guess the only project node for ordinary chat', () => {
+  assert.equal(inferTarget('你好，请介绍一下你自己', [{ id: 'only.module', type: 'code_module', title: 'Only module' }]), null);
+});
+
 test('treats explicit current-turn exclusions as negative context rather than target mentions', () => {
   const nodes = [
     { id: 'function.asr', title: 'ASR' },

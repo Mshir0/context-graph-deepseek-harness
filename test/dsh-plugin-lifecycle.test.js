@@ -186,6 +186,20 @@ function userMessage(text) {
   return createUserMessage({ content: [{ type: 'text', text }], source: { kind: 'user' } });
 }
 
+test('accepts string-form user content from browser clients', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'context-graph-string-input-'));
+  const harness = createHarnessContext();
+  apply(harness.ctx, { webUi: false, autoInject: false, firewallMode: 'enforce' });
+  const agent = { session: createSession('session-string-input', root), ctx: { effect() {} } };
+  harness.handlers.get('agent/session-start')({ agent });
+  const step = await harness.handlers.get('agent/pre-step')(
+    { agent, turn: 1, step: 1, signal: new AbortController().signal },
+    async () => ({ kind: 'enter', messages: [{ role: 'user', content: '请处理一个较长的请求内容', source: { kind: 'user' } }] }),
+  );
+  assert.equal(step.kind, 'enter');
+  assert.ok(step.messages.some(message => message.role === 'user' && message.content === '请处理一个较长的请求内容'));
+});
+
 function toolMessage(text) {
   return createUserMessage({ content: [{ type: 'text', text }], source: { kind: 'tool', callId: 'call-test' } });
 }
