@@ -79,7 +79,9 @@ export function pdfPythonCandidates(projectPath, { env = process.env, platform =
     projectPath && path.join(projectPath, '.venv', relativePython),
     path.join(pluginRoot, '.venv-pdf', relativePython),
     home && path.join(home, 'context-graph-deepseek-harness', '.venv-pdf', relativePython),
-    ...(windows ? ['py', 'python'] : ['/usr/bin/python3', '/usr/local/bin/python3', 'python3', 'python']),
+    ...(windows
+      ? ['py', 'python']
+      : ['/usr/bin/python3', '/usr/bin/python3.14', '/usr/bin/python3.13', '/usr/bin/python3.12', '/usr/bin/python3.11', '/usr/local/bin/python3', '/usr/local/bin/python3.14', '/usr/local/bin/python3.13', 'python3', 'python']),
   ].filter(Boolean);
   return [...new Set(candidates)];
 }

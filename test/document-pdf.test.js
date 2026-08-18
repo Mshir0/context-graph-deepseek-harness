@@ -38,6 +38,7 @@ test('prefers explicit, project, plugin, and absolute system Python candidates',
   assert.ok(candidates.includes(path.join('/plugin', '.venv-pdf', 'bin', 'python')));
   assert.ok(candidates.includes(path.join('/home/tester', 'context-graph-deepseek-harness', '.venv-pdf', 'bin', 'python')));
   assert.ok(candidates.includes('/usr/bin/python3'));
+  assert.ok(candidates.includes('/usr/bin/python3.14'));
 });
 
 test('scans a native PDF outline into documentation nodes and hierarchy edges', async () => {
