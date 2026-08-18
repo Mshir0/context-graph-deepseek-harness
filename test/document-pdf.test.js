@@ -4,7 +4,7 @@ import { mkdtemp, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { emptyGraph, validateGraph } from '../src/core.js';
-import { extractPdfSections, findPdfSections, scanPdfDocument } from '../src/document-pdf.js';
+import { extractPdfLayout, extractPdfSections, findPdfSections, scanPdfDocument } from '../src/document-pdf.js';
 
 async function fixture() {
   const root = await mkdtemp(path.join(os.tmpdir(), 'context-graph-pdf-'));
@@ -83,4 +83,32 @@ test('reports PDFs without native outlines without inventing chapters', async ()
   assert.equal(result.outlineAvailable, false);
   assert.equal(result.sections.length, 0);
   assert.equal(result.graph.nodes.length, 1);
+});
+
+test('extracts code blocks and tables as page-cited section child nodes', async () => {
+  const root = await fixture();
+  const scanned = await scanPdfDocument({ projectPath: root, filePath: 'architecture.pdf', graph: emptyGraph(root), analyze: outlineAnalyzer });
+  const section = scanned.sections.find(node => node.title === 'Authentication');
+  const analyze = async (command, _filename, range) => {
+    assert.equal(command, 'layout');
+    assert.deepEqual(range, { pageStart: 10, pageEnd: 29 });
+    return {
+      backend: 'pymupdf',
+      codeBlocks: [{ page: 12, bbox: [72, 100, 520, 240], language: 'python', confidence: 0.96, text: 'def authenticate(token):\n    return verify(token)' }],
+      tables: [{ page: 14, bbox: [72, 260, 520, 420], columns: ['Parameter', 'Type', 'Required'], rows: [['token', 'string', 'yes']], markdown: '| Parameter | Type | Required |\n| --- | --- | --- |\n| token | string | yes |' }],
+    };
+  };
+  const result = await extractPdfLayout({ projectPath: root, graph: scanned.graph, sectionIds: [section.id], maxTokens: 500, apply: true, analyze });
+  assert.equal(result.codeBlocks.length, 1);
+  assert.equal(result.tables.length, 1);
+  assert.ok(result.estimatedTokens <= 500);
+  assert.match(result.context, /```python/);
+  assert.match(result.context, /"Parameter"/);
+  assert.deepEqual(validateGraph(result.graph), []);
+  const codeNode = result.graph.nodes.find(node => node.metadata?.kind === 'pdf_code_block');
+  const tableNode = result.graph.nodes.find(node => node.metadata?.kind === 'pdf_table');
+  assert.deepEqual(codeNode.metadata.bbox, [72, 100, 520, 240]);
+  assert.equal(tableNode.metadata.page, 14);
+  assert.ok(result.graph.edges.some(edge => edge.source === section.id && edge.target === codeNode.id && edge.metadata?.analyzer === 'pdf-layout'));
+  assert.ok(result.graph.edges.some(edge => edge.source === section.id && edge.target === tableNode.id && edge.metadata?.analyzer === 'pdf-layout'));
 });

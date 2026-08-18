@@ -64,9 +64,10 @@ Context Compiler
 - `document_scan` 只读取 PDF 元数据和原生目录，先建立文档、章节与层级关系。
 - `document_find_sections` 根据当前任务匹配目录标题，不预先加载整本正文。
 - `document_extract_sections` 只提取选中章节的页码范围，并在内容中保留文件与页码引用。
+- `document_extract_layout` 从选中章节识别代码块与表格，代码保存为围栏块，表格同时保存 Markdown 和 JSON。
 - `apply=true` 时，提取结果保存到对应 `documentation` 节点，之后可由 Context Compiler 按预算选择。
 
-第一版不执行 OCR，也不会为没有原生书签的 PDF 猜测目录；此类文件会返回 `outlineAvailable: false`。
+布局结果会保存页码和 `bbox`，并作为章节的 `contains` 子节点加入图谱。当前不执行 OCR，也不会为没有原生书签的 PDF 猜测目录；此类文件会返回 `outlineAvailable: false`。
 
 ### 上下文编译与防火墙
 
@@ -173,6 +174,7 @@ pnpm dsh web
 | `document_scan` | 读取 PDF 原生目录并建立章节图谱 |
 | `document_find_sections` | 按任务匹配目录章节，不读取正文 |
 | `document_extract_sections` | 按页提取选中章节并可持久化到图谱 |
+| `document_extract_layout` | 提取章节内代码块和 Markdown+JSON 表格 |
 
 随插件发布的 Skills 按职责拆分为 `module-discovery`、`dependency-analysis`、`interface-contract`、`document-analysis`、`context-extraction`、`context-routing`、`context-maintenance`、`context-compiler` 和 `context-firewall`。
 

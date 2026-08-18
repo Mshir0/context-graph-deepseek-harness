@@ -41,7 +41,7 @@ function parseAnalyzerOutput(stdout, stderr = '') {
 export async function runPdfAnalyzer(command, filename, range = {}) {
   const candidates = [process.env.CONTEXT_GRAPH_PDF_PYTHON, process.env.DEPENDENCY_SKILL_PYTHON, ...(process.platform === 'win32' ? ['py', 'python'] : ['python3', 'python'])].filter(Boolean);
   const args = [path.join(HERE, 'analyze_pdf.py'), command, filename];
-  if (command === 'extract') args.push(String(range.pageStart), String(range.pageEnd));
+  if (command === 'extract' || command === 'layout') args.push(String(range.pageStart), String(range.pageEnd));
   let lastError;
   for (const executable of candidates) {
     try {
@@ -208,4 +208,106 @@ export async function extractPdfSections({ projectPath, graph, sectionIds, maxTo
     if (remainingChars <= 0) break;
   }
   return { graph: next, applied: apply, maxTokens: limit, estimatedTokens: extracted.reduce((sum, item) => sum + item.estimatedTokens, 0), sections: extracted, context: extracted.map(item => `## ${item.title}\n\n${item.content}`).join('\n\n') };
+}
+
+function layoutId(sectionId, kind, item, index) {
+  const identity = JSON.stringify([item.page, item.bbox, item.text || item.markdown || '', index]);
+  return `${sectionId}.${kind}.${createHash('sha256').update(identity).digest('hex').slice(0, 12)}`;
+}
+
+function boundedLayoutContent(source, maxChars) {
+  if (maxChars <= 0) return { content: '', truncated: source.length > 0 };
+  return { content: source.slice(0, maxChars), truncated: source.length > maxChars };
+}
+
+export async function extractPdfLayout({ projectPath, graph, sectionIds, maxTokens = 12000, apply = false, analyze = runPdfAnalyzer }) {
+  if (!Array.isArray(sectionIds) || !sectionIds.length || sectionIds.some(id => typeof id !== 'string')) throw pdfError('sectionIds must be a non-empty array', 'PDF_SECTIONS_REQUIRED');
+  const sourceNodes = new Map((graph.nodes || []).map(node => [node.id, node]));
+  const sections = [...new Set(sectionIds)].map(id => sourceNodes.get(id));
+  if (sections.some(node => node?.metadata?.kind !== 'pdf_section')) throw pdfError('Every section id must reference a PDF outline section', 'PDF_SECTION_NOT_FOUND');
+  const selected = new Set(sections.map(node => node.id));
+  const limit = Math.max(100, Math.min(50000, Number(maxTokens) || 12000));
+  let remainingChars = limit * 4;
+  const next = structuredClone(graph);
+  next.nodes = next.nodes.filter(node => !selected.has(node.metadata?.parentSectionId) || node.mode === 'MANUAL' || !['pdf_code_block', 'pdf_table'].includes(node.metadata?.kind));
+  next.edges = next.edges.filter(edge => edge.metadata?.analyzer !== 'pdf-layout' || !selected.has(edge.source));
+  const nodeById = new Map(next.nodes.map(node => [node.id, node]));
+  const codeBlocks = [];
+  const tables = [];
+  const context = [];
+  const now = new Date().toISOString();
+
+  for (const section of sections) {
+    const pageStart = Number(section.metadata.pageStart);
+    const pageEnd = Number(section.metadata.pageEnd);
+    if (pageEnd - pageStart + 1 > MAX_EXTRACT_PAGES) throw pdfError(`Section exceeds the ${MAX_EXTRACT_PAGES}-page extraction limit: ${section.id}`, 'PDF_SECTION_TOO_LARGE');
+    const file = await workspacePdf(projectPath, section.metadata.pdfFile);
+    const result = await analyze('layout', file.filename, { pageStart, pageEnd });
+    const artifacts = [
+      ...(Array.isArray(result.codeBlocks) ? result.codeBlocks : []).map((item, index) => ({ kind: 'pdf_code_block', item, index })),
+      ...(Array.isArray(result.tables) ? result.tables : []).map((item, index) => ({ kind: 'pdf_table', item, index })),
+    ];
+    for (const artifact of artifacts) {
+      if (remainingChars <= 0) break;
+      const page = Math.max(pageStart, Math.min(pageEnd, Number(artifact.item.page) || pageStart));
+      let body;
+      let title;
+      if (artifact.kind === 'pdf_code_block') {
+        const language = String(artifact.item.language || 'text').replace(/[^a-z0-9_+-]/gi, '') || 'text';
+        title = `${section.title} · code · p.${page}`;
+        const source = `Source: ${section.metadata.pdfFile}, page ${page}`;
+        const overhead = `## ${title}\n\n${source}\n\n\`\`\`${language}\n\n\`\`\``.length;
+        const bounded = boundedLayoutContent(String(artifact.item.text || '').trim(), Math.max(0, remainingChars - overhead));
+        body = `${source}\n\n\`\`\`${language}\n${bounded.content}\n\`\`\``;
+        codeBlocks.push({ sectionId: section.id, page, language, bbox: artifact.item.bbox || null, confidence: artifact.item.confidence ?? null, truncated: bounded.truncated, content: body });
+      } else {
+        const tableData = { columns: Array.isArray(artifact.item.columns) ? artifact.item.columns : [], rows: Array.isArray(artifact.item.rows) ? artifact.item.rows : [] };
+        const source = `${String(artifact.item.markdown || '').trim()}\n\nJSON:\n${JSON.stringify(tableData, null, 2)}`.trim();
+        title = `${section.title} · table · p.${page}`;
+        const citation = `Source: ${section.metadata.pdfFile}, page ${page}`;
+        const overhead = `## ${title}\n\n${citation}\n\n`.length;
+        const bounded = boundedLayoutContent(source, Math.max(0, remainingChars - overhead));
+        body = `${citation}\n\n${bounded.content}`;
+        tables.push({ sectionId: section.id, page, bbox: artifact.item.bbox || null, columns: tableData.columns, rows: tableData.rows, truncated: bounded.truncated, content: body });
+      }
+      const entry = `## ${title}\n\n${body}`;
+      remainingChars -= entry.length;
+      context.push(entry);
+      if (!apply) continue;
+      const id = layoutId(section.id, artifact.kind === 'pdf_code_block' ? 'code' : 'table', artifact.item, artifact.index);
+      const node = {
+        id,
+        type: 'documentation',
+        title,
+        label: title,
+        content: body,
+        description: `${artifact.kind === 'pdf_code_block' ? 'Code block' : 'Table'} extracted from ${section.metadata.pdfFile}, page ${page}`,
+        source: `${section.metadata.pdfFile}#page=${page}`,
+        created_by: 'analyzer',
+        priority: 'normal',
+        status: 'active',
+        mode: 'AUTO',
+        x: Number(section.x || 80) + 240,
+        y: Number(section.y || 80) + (artifact.index + 1) * 120,
+        created_at: now,
+        updated_at: now,
+        metadata: {
+          kind: artifact.kind,
+          pdfFile: section.metadata.pdfFile,
+          documentId: section.metadata.documentId,
+          documentHash: section.metadata.documentHash,
+          parentSectionId: section.id,
+          page,
+          bbox: artifact.item.bbox || null,
+          ...(artifact.kind === 'pdf_code_block' ? { language: artifact.item.language || 'text', confidence: artifact.item.confidence ?? null } : { columns: artifact.item.columns || [], rows: artifact.item.rows || [] }),
+        },
+      };
+      nodeById.set(id, node);
+      next.edges.push({ source: section.id, target: id, type: 'contains', scope: ['content'], mode: 'AUTO', confidence: 1, metadata: { analyzer: 'pdf-layout', pdfFile: section.metadata.pdfFile, page } });
+    }
+    if (remainingChars <= 0) break;
+  }
+  next.nodes = [...nodeById.values()];
+  const estimatedTokens = Math.ceil(context.join('\n\n').length / 4);
+  return { graph: next, applied: apply, maxTokens: limit, estimatedTokens, codeBlocks, tables, context: context.join('\n\n') };
 }

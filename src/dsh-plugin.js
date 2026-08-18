@@ -26,7 +26,7 @@ import { analyzeContextProject, applyContextInvalidation } from './project-analy
 import { resolveSessionContextSettings, updateSessionContextSettings } from './session-context.js';
 import { applyExtraction, detectContextConflicts, extractContext } from './context-extraction.js';
 import { applyFunctionalInference, inferFunctionalModules, mergeFunctionalNodes, splitFunctionalNode } from './semantic-functional.js';
-import { extractPdfSections, findPdfSections, scanPdfDocument } from './document-pdf.js';
+import { extractPdfLayout, extractPdfSections, findPdfSections, scanPdfDocument } from './document-pdf.js';
 import {
   analyzeDependencies,
   analyzeModule,
@@ -74,7 +74,7 @@ export function apply(ctx, input = {}) {
   ctx.systemPrompt.section({
     name: 'context-graph:policy',
     order: 99,
-    text: 'Treat the Semantic Functional Graph as WHAT the system does and the Implementation Graph as HOW code realizes it. Use context_graph_scan for implementation changes and functional_infer only for reviewed Functional proposals. Never expose imports or calls as Functional edges. Use context_extract for durable structured knowledge. For PDFs, call document_scan, then document_find_sections, and extract only selected sections with document_extract_sections. Compile from Task or Functional entries, resolve only relevant implementation mappings, and preserve MANUAL, FORCE_INCLUDE, and FORCE_EXCLUDE choices.',
+    text: 'Treat the Semantic Functional Graph as WHAT the system does and the Implementation Graph as HOW code realizes it. Use context_graph_scan for implementation changes and functional_infer only for reviewed Functional proposals. Never expose imports or calls as Functional edges. Use context_extract for durable structured knowledge. For PDFs, call document_scan, then document_find_sections, and extract only selected sections with document_extract_sections; use document_extract_layout when code blocks or tables are required. Compile from Task or Functional entries, resolve only relevant implementation mappings, and preserve MANUAL, FORCE_INCLUDE, and FORCE_EXCLUDE choices.',
   });
 
   ctx.on('agent/session-start', ({ agent }) => {
@@ -545,6 +545,23 @@ function registerTools(ctx, config, sessionState) {
     async execute(args, exec) {
       const root = workspaceOf(exec);
       const result = await extractPdfSections({ projectPath: root, graph: await loadGraph(root), sectionIds: args.section_ids, maxTokens: args.max_tokens, apply: args.apply === true });
+      if (result.applied) await saveGraph(root, result.graph);
+      const { graph: _graph, ...output } = result;
+      return JSON.stringify(output, null, 2);
+    },
+  }));
+
+  ctx.tools.register(textTool({
+    name: 'document_extract_layout',
+    description: 'Extract code blocks and tables from selected PDF sections while preserving page and bounding-box provenance. Set apply=true to save them as section child nodes.',
+    parameters: {
+      section_ids: { type: 'array', items: { type: 'string' }, required: true, description: 'PDF section node ids returned by document_find_sections.' },
+      max_tokens: { type: 'integer', description: 'Combined code/table extraction budget, from 100 to 50000. Defaults to 12000.' },
+      apply: { type: 'boolean', description: 'Persist code blocks and tables as documentation child nodes.' },
+    },
+    async execute(args, exec) {
+      const root = workspaceOf(exec);
+      const result = await extractPdfLayout({ projectPath: root, graph: await loadGraph(root), sectionIds: args.section_ids, maxTokens: args.max_tokens, apply: args.apply === true });
       if (result.applied) await saveGraph(root, result.graph);
       const { graph: _graph, ...output } = result;
       return JSON.stringify(output, null, 2);
