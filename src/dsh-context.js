@@ -92,11 +92,20 @@ export function inferTarget(task, nodes, { exclude = [] } = {}) {
   const blocked = new Set([...exclude, ...turnExclusions.exclude, ...turnExclusions.ambiguous.flatMap(item => item.candidates)]);
   const lower = task.toLowerCase();
   const available = nodes.filter(node => !blocked.has(node.id));
-  const matches = available.filter(node => {
+  const matches = available.flatMap(node => {
     const candidates = [node.id, node.title, node.label, node.path].filter(Boolean).map(value => String(value).toLowerCase());
-    return candidates.some(value => lower.includes(value) || lower.includes(value.split(/[/.]/).at(-1)));
-  }).sort((a, b) => b.id.length - a.id.length);
-  return matches[0]?.id || (available.length === 1 ? available[0].id : null);
+    const exact = candidates.find(value => value.length >= 2 && lower.includes(value));
+    if (exact) return { node, score: 3, alias: exact };
+    const leaves = [...new Set(candidates.map(value => value.split(/[/.]/).at(-1)).filter(value => value.length >= 4))];
+    const leaf = leaves.find(value => lower.includes(value));
+    return leaf ? { node, score: 1, alias: leaf } : [];
+  }).sort((a, b) => b.score - a.score || b.alias.length - a.alias.length || b.node.id.length - a.node.id.length);
+  if (matches[0]?.score === 3) return matches[0].node.id;
+  if (matches[0]?.score === 1) {
+    const sameAlias = matches.filter(item => item.score === 1 && item.alias === matches[0].alias);
+    if (sameAlias.length === 1) return matches[0].node.id;
+  }
+  return available.length === 1 ? available[0].id : null;
 }
 
 export function preview(result, includeContent) {

@@ -16,6 +16,16 @@ test('infers the most specific module mentioned by the task', () => {
   assert.equal(inferTarget('Unrelated task', nodes), null);
 });
 
+test('does not select one arbitrary module for a repeated project alias', () => {
+  const nodes = [
+    { id: 'requests.src.requests', type: 'code_module' },
+    { id: 'requests.tests.test_requests', type: 'code_module' },
+    { id: 'requests.examples.requests', type: 'code_module' },
+  ];
+  assert.equal(inferTarget('请先说明工程当前状态，不修改代码', nodes), null);
+  assert.equal(inferTarget('请修改 requests.src.requests 中的 Session', nodes), 'requests.src.requests');
+});
+
 test('treats explicit current-turn exclusions as negative context rather than target mentions', () => {
   const nodes = [
     { id: 'function.asr', title: 'ASR' },
