@@ -10,6 +10,6 @@
         tokenSafetyRatio: 1.15
         allowedInstructionPlugins: []
         autoScan: true
-        autoInject: true
+        autoInject: false
         firewallMode: enforce
         webUi: true

@@ -56,7 +56,9 @@ const DEFAULTS = {
   tokenSafetyRatio: 1.15,
   allowedInstructionPlugins: [],
   autoScan: true,
-  autoInject: true,
+  // Context is opt-in: ordinary composer sends must remain context-free.
+  // The task command temporarily enables injection for its own turn.
+  autoInject: false,
   webUi: true,
   firewallMode: 'enforce',
 };

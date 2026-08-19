@@ -33,7 +33,7 @@ const STATUSES = ['active', 'resolved', 'deprecated', 'superseded', 'archived', 
 const TASKS = [['develop', '开发'], ['debug', '调试'], ['refactor', '重构'], ['test', '测试'], ['review', '审查'], ['docs', '文档']];
 const CREATE_NODE_TYPES = [['functional', '功能', '新建功能'], ['task', '任务', '新建任务'], ['requirement', '需求', '新建需求'], ['constraint', '约束', '新建约束'], ['decision', '决策', '新建决策'], ['issue', '问题', '新建问题'], ['note', '备注', '新建备注']];
 const CONTEXT_BUDGETS = [2000, 4000, 6000, 8000, 12000, 16000];
-const DEFAULT_SESSION_CONTEXT = { autoInject: true, tokenBudget: 6000, reuseContext: true, maxImplementationFiles: 2, semanticDepth: 2, include: [], exclude: [] };
+const DEFAULT_SESSION_CONTEXT = { autoInject: false, tokenBudget: 6000, reuseContext: true, maxImplementationFiles: 2, semanticDepth: 2, include: [], exclude: [] };
 const IMPLEMENTATION_LEVELS = [['0', '文件'], ['1', '类'], ['2', '函数'], ['3', '符号']];
 const IMPLEMENTATION_TYPES = new Set(['code_module', 'implementation_file', 'implementation_class', 'implementation_function', 'implementation_package', 'implementation_symbol']);
 const NODE_W = 178;
@@ -398,7 +398,15 @@ function ContextCommand({ sessionId, projectPath, inputActions, targetStore, sen
       if (!created.task?.id) throw new Error('服务未返回新建任务');
       persisted = true;
       targetStore.set(sessionId, created.task.id);
-      await sendPrompt(`任务类型：${taskLabel}\n目标模块：${created.target || '自动识别'}\n\n${content}`);
+      // Task creation is the explicit opt-in boundary for Context Graph
+      // injection. Restore the session's previous setting after this turn.
+      const wasAutoInject = settings.autoInject === true;
+      if (!wasAutoInject) await updateSettings({ autoInject: true });
+      try {
+        await sendPrompt(`任务类型：${taskLabel}\n目标模块：${created.target || '自动识别'}\n\n${content}`);
+      } finally {
+        if (!wasAutoInject) await updateSettings({ autoInject: false });
+      }
       setTask('');
       setOpen(false);
     } catch (cause) {
