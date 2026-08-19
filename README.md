@@ -5,15 +5,15 @@
 [![C/C++](https://img.shields.io/badge/parser-C%20%2F%20C%2B%2B-f59e0b)](#cc-解析)
 [![License](https://img.shields.io/badge/license-MIT-16a34a)](LICENSE)
 
-面向 AI Coding Agent 的工程上下文管理插件。它直接加载到 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的对话界面，在对话与轨迹旁提供 Context Graph 视图，并在模型请求前编译、审计和注入与当前任务相关的工程上下文。
+这是一个给 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 用的工程上下文插件。它在 Harness 对话界面里增加 Context Graph 视图，并在请求模型前整理、审计和注入当前任务需要的项目上下文。
 
 它不是独立软件，不启动额外网页，也不替换 Harness 的模型客户端。
 
-## 解决什么问题
+## 为什么做这个插件
 
-AI Coding Agent 通常同时面对三类信息：当前任务、项目记忆和源码依赖。全部发送会浪费上下文预算，只发送当前一句话又容易遗漏接口约束。
+Coding Agent 工作时既要理解当前任务，也要记住项目约定，还要找到相关源码。把所有内容都塞进请求很浪费，只看眼前的一句话又很容易漏掉接口和依赖约束。
 
-Context Graph 把这些信息拆成可追溯的节点和关系：
+这个插件把它们整理成可以追溯的节点和关系：
 
 ```text
 用户任务
@@ -29,17 +29,17 @@ Context Compiler
 
 ## 特性
 
-### 语义功能图
+### 功能与任务
 
-- 用功能、任务、需求、约束、决策、问题和备注描述“系统做什么”。
-- 功能节点可以映射到多个实现文件，支持合并、拆分和手动调整。
-- 语义视图默认隐藏 import、call 等实现细节，避免功能图被代码关系污染。
+- 用功能、任务、需求、约束、决策、问题和备注记录“系统要做什么”。
+- 一个功能可以关联多个实现文件，也可以随时合并、拆分或手动调整。
+- 这个视图默认不展示 import、call 等代码细节，日常查看时不会被依赖线淹没。
 
 ### 实现与依赖图
 
-- 扫描 Python、C 和 C++ 模块、符号、调用、继承、接口和项目内依赖。
-- 支持增量扫描、变更检测、调用方/被调用方查询和接口提取。
-- 自动关系只在源码证据足够明确时生成；不猜测宏展开、重载歧义或外部符号。
+- 扫描 Python、C 和 C++ 的模块、符号、调用、继承、接口和项目内依赖。
+- 修改代码后可以增量更新，也能查询调用方、被调用方和接口定义。
+- 只有源码证据明确时才会自动连线。宏展开、重载歧义和外部符号不会靠猜测补全。
 
 ### C/C++ 解析
 
@@ -49,7 +49,7 @@ Context Compiler
 .c  .cc  .cpp  .cxx  .h  .hh  .hpp  .hxx
 ```
 
-可提取：
+目前会提取：
 
 - 项目内 `#include` 关系
 - 类和结构体
@@ -57,32 +57,32 @@ Context Compiler
 - 唯一可确认的函数调用
 - 继承关系
 
-源文件和头文件使用独立模块 ID，避免同名文件冲突。无法唯一确认的关系会保留为未知，不会自动写入错误依赖。
+源文件和头文件使用独立模块 ID，避免同名冲突。无法唯一确认的关系会标记为未知。
 
-### PDF 章节按需阅读
+### 按章节读取 PDF
 
-- `document_scan` 只读取 PDF 元数据和原生目录，先建立文档、章节与层级关系。
-- `document_find_sections` 根据当前任务匹配目录标题，不预先加载整本正文。
-- `document_extract_sections` 只提取选中章节的页码范围，并在内容中保留文件与页码引用。
-- `document_extract_layout` 从选中章节识别代码块与表格，代码保存为围栏块，表格同时保存 Markdown 和 JSON。
-- `apply=true` 时，提取结果保存到对应 `documentation` 节点，之后可由 Context Compiler 按预算选择。
+- `document_scan` 读取 PDF 元数据和原生目录，建立文档与章节层级。
+- `document_find_sections` 按当前任务匹配目录标题，不会先加载整本正文。
+- `document_extract_sections` 提取选中章节，并保留文件名和页码引用。
+- `document_extract_layout` 识别章节里的代码块与表格；表格会同时保存为 Markdown 和 JSON。
+- 传入 `apply=true` 后，结果会写入对应的 `documentation` 节点，供 Context Compiler 后续选择。
 
-布局结果会保存页码和 `bbox`，并作为章节的 `contains` 子节点加入图谱。当前不执行 OCR，也不会为没有原生书签的 PDF 猜测目录；此类文件会返回 `outlineAvailable: false`。
+布局结果会保存页码和 `bbox`，并作为章节的 `contains` 子节点加入图谱。目前不做 OCR。没有原生书签的 PDF 会返回 `outlineAvailable: false`，插件不会自行猜目录。
 
 ### 上下文编译与防火墙
 
-- 从任务或功能目标开始，只选择相关的结构化上下文和少量实现文件。
-- 支持单轮预算、相关实现文件数量、语义关联层数、临时包含/排除和上下文复用。
+- 从任务或功能目标出发，挑选相关的结构化上下文和实现文件。
+- 可以控制单轮预算、文件数量、关联层数，也支持临时包含、排除和上下文复用。
 - 在 `agent/pre-step` 编译 Context Snapshot，在最终 `llm/stream` 请求边界执行消息、快照、工具和 token 审计。
 - `FORCE_INCLUDE`、`FORCE_EXCLUDE` 和用户确认的 `MANUAL` 关系优先于自动分析。
-- 普通对话无法推断目标时使用空的 `context.none` 快照，不会因为图谱暂时不可用吞掉用户输入。
+- 普通对话无法判断目标时会使用空的 `context.none` 快照，用户输入仍会正常发送。
 
 ### 原生 Harness 界面
 
-- Context Graph 作为 Harness 对话区域的原生视图标签。
-- 支持中文、明暗主题、节点拖动、画布平移、缩放、自动排布和属性编辑。
-- 右下角输入框可直接发送普通对话；“上下文”按钮用于创建持久任务、选择任务类型和调整本会话注入策略。
-- Context Preview 显示包含项、排除项、来源、原因、token 统计和最终审计结果。
+- Context Graph 显示在 Harness 对话区域的视图标签中。
+- 界面支持中文、明暗主题、节点拖动、画布平移、缩放、自动排布和属性编辑。
+- 右下角输入框照常发送消息；“上下文”按钮用来创建持久任务、选择任务类型和调整当前会话的注入策略。
+- Context Preview 可以检查包含项、排除项、来源、原因、token 统计和最终审计结果。
 
 ## 环境要求
 
@@ -103,7 +103,7 @@ python3 -m venv .venv-pdf
 
 ## 安装
 
-### 本地源码安装（推荐用于验证修复）
+### 本地源码安装
 
 插件源码必须位于 WSL 文件系统中。可以将当前源码复制到 WSL，或在 WSL 中克隆后作为本地依赖使用：
 
@@ -115,7 +115,7 @@ pnpm dsh --profile web --dump-config
 pnpm dsh web
 ```
 
-修改 `/home/mashiro/context-graph-deepseek-harness` 中的源码后，重新执行 `add -w` 并重启 Harness。这样加载的是本地源码，不会使用旧的 GitHub 包缓存。
+修改 `/home/mashiro/context-graph-deepseek-harness` 中的源码后，重新执行 `add -w` 并重启 Harness。这个方式适合本地开发和验证修复，也能避开旧的 GitHub 包缓存。
 
 ### 从 GitHub 安装
 
@@ -261,9 +261,9 @@ pnpm test
 - 代码调用关系属于实现图，不会直接冒充功能关系。
 - Context Firewall 无法安全替换已有历史时会阻止请求，而不是静默把未选择的历史发送给模型。
 
-## 参与贡献
+## 贡献
 
-欢迎通过 [Issue](https://github.com/Mshir0/context-graph-deepseek-harness/issues) 和 Pull Request 反馈问题或提交改进。涉及 Host 生命周期、防火墙、依赖扫描或 UI 的改动，请同时补充相应回归测试。
+问题和改进可以直接提交到 [Issue](https://github.com/Mshir0/context-graph-deepseek-harness/issues) 或 Pull Request。改到 Host 生命周期、防火墙、依赖扫描或 UI 时，请一并补上相应的回归测试。
 
 ## 许可证
 
